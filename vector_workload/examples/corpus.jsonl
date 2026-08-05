@@ -1,0 +1,8 @@
+{"id":"doc-h100","text":"NVIDIA H100 is a data center GPU designed for accelerated computing and large-scale AI workloads.","metadata":{"source":"smoke-test"}}
+{"id":"doc-vector-db","text":"A vector database stores embedding vectors and searches for nearby vectors using a similarity metric and an index.","metadata":{"source":"smoke-test"}}
+{"id":"doc-rag","text":"Retrieval-augmented generation retrieves relevant documents before producing an answer with a language model.","metadata":{"source":"smoke-test"}}
+{"id":"doc-diskann","text":"DiskANN is an approximate nearest-neighbor index designed for efficient vector search over large datasets.","metadata":{"source":"smoke-test"}}
+{"id":"doc-milvus","text":"Milvus is a vector database service that can use object storage such as MinIO as part of its deployment.","metadata":{"source":"smoke-test"}}
+{"id":"doc-artifact","text":"A reproducible vector workload artifact contains corpus vectors, query vectors, metadata, checksums, and workload parameters.","metadata":{"source":"smoke-test"}}
+{"id":"doc-manifest","text":"A workload manifest records the embedding model, vector dimension, dtype, normalization, chunking, and request schedule.","metadata":{"source":"smoke-test"}}
+{"id":"doc-benchmark","text":"A storage benchmark should report latency distributions, throughput, bandwidth, errors, and cache conditions.","metadata":{"source":"smoke-test"}}

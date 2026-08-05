@@ -199,6 +199,8 @@ You can check the output result within the `output` folder. To visualize the out
 
 RAGPerf supports many popular vector databases. To set up, check the detailed documentations at [VectorDB README](src/vectordb/README.md).
 
+For a GPU-independent portable vector artifact and Milvus DISKANN record/replay workflow, see the [vector workload guide](vector_workload/README.md).
+
 Want to add a new DB? Check our RAGPerf API at [VectorDB API](src/vectordb/README.md#adding-a-new-vector-database). This benchmark suit can automatically perform profiling and analysis on your vector database after implementing these APIs.
 
 ### Monitoring System

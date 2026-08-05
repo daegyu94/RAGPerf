@@ -12,6 +12,7 @@ build/
 .ptpython_history
 **/__pycache__/
 requirements.txt
+!vector_workload/requirements.txt
 
 # build artifacts
 build/

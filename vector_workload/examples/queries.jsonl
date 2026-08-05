@@ -1,0 +1,4 @@
+{"id":"query-gpu","text":"Which GPU is used to create the vectors?","delay_ms":0}
+{"id":"query-database","text":"What does a vector database store?","delay_ms":100}
+{"id":"query-artifact","text":"What information belongs in the workload artifact?","delay_ms":100}
+{"id":"query-storage","text":"Which metrics should a storage benchmark report?","delay_ms":250}
