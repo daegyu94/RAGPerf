@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import itertools
 import json
 import shutil
 import sys
@@ -27,6 +26,20 @@ def write_jsonl(path: Path, rows: Iterable[dict[str, Any]]) -> int:
     if count == 0:
         raise ValueError(f"no records written to {path}")
     return count
+
+
+def take_rows(rows: Iterable[dict[str, Any]], count: int) -> Iterable[dict[str, Any]]:
+    iterator = iter(rows)
+    try:
+        for _ in range(count):
+            try:
+                yield next(iterator)
+            except StopIteration:
+                return
+    finally:
+        close = getattr(iterator, "close", None)
+        if close is not None:
+            close()
 
 
 def wikipedia_rows(rows: Iterable[dict[str, Any]]) -> Iterable[dict[str, Any]]:
@@ -88,11 +101,11 @@ def prepare_wikipedia_nq(
     )
     corpus_count = write_jsonl(
         output_dir / "corpus.jsonl",
-        itertools.islice(wikipedia_rows(wikipedia), args.corpus_count),
+        take_rows(wikipedia_rows(wikipedia), args.corpus_count),
     )
     query_count = write_jsonl(
         output_dir / "queries.jsonl",
-        itertools.islice(natural_question_rows(natural_questions), args.query_count),
+        take_rows(natural_question_rows(natural_questions), args.query_count),
     )
     result = {
         "workload": "wikipedia-natural-questions",
