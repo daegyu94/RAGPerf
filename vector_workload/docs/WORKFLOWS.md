@@ -1,34 +1,17 @@
 # Vector Workload Workflow Guide
 
-이 문서는 [README](../README.md)의 Quick Start보다 큰 workload를 준비하고 Milvus DISKANN에서
-replay하는 방법을 설명한다. 입력과 artifact의 의미는 [Artifact Format](ARTIFACT_FORMAT.md)을
-참고한다.
+이 문서는 dataset별 input을 준비하고 artifact로 기록하는 recipe를 제공한다. 공통 record 절차는
+[Record Guide](RECORD.md), Milvus 실행은 [Replay Guide](REPLAY.md), 입력과 artifact의 의미는
+[Artifact Format](ARTIFACT_FORMAT.md)을 참고한다.
 
-## Environment Setup
-
-Embedding exporter와 ColPali exporter는 GPU 서버에서 실행한다. Target Milvus 서버에서
-replay할 때 사용하는 package는 `pyarrow`, `PyYAML`, `numpy`, `pymilvus`다.
-
-Project root에서 project-local virtual environment를 준비한다.
-
-```bash
-uv venv .venv
-source .venv/bin/activate
-uv pip install -r vector_workload/requirements.txt
-```
-
-첫 실행에서는 지정한 Sentence Transformers 또는 ColPali model을 Hugging Face Hub에서
-다운로드할 수 있다. Embedding을 생성하기 전에 `nvidia-smi`로 사용할 GPU가 비어 있는지
-확인한다.
-
-`export_vectors.py export`의 기본 model은 `BAAI/bge-m3`다. `--smoke`는
-`sentence-transformers/all-MiniLM-L6-v2`를 사용하며, `--model`을 지정하면 명시한 model을
-사용한다.
+먼저 [Record Guide](RECORD.md)의 project-local environment를 준비한다. Embedding exporter와
+ColPali exporter는 GPU server에서 실행하며, 첫 실행에서는 지정한 model을 Hugging Face Hub에서
+다운로드할 수 있다.
 
 ## Wikipedia + Natural Questions
 
 Preparer로 Hugging Face의 Wikipedia corpus와 Natural Questions query를 JSONL로 만든 뒤
-text exporter와 replayer를 사용한다.
+text exporter로 기록한다.
 
 ```bash
 python vector_workload/prepare_workloads.py wikipedia-nq \
@@ -93,21 +76,11 @@ python vector_workload/export_colpali.py \
   --initial-corpus-ratio 0.8 \
   --searches-per-insert 10 \
   --insert-event-size 10
-
-python vector_workload/replay_milvus.py \
-  --artifact-dir /MNTPNT/ragperf/arxiv-image/artifact \
-  --uri http://localhost:19530 \
-  --collection ragperf_arxiv_colpali_001 \
-  --result-file /MNTPNT/ragperf/arxiv-image/replay-result.json \
-  --index-type DISKANN \
-  --metric IP \
-  --top-k 10 \
-  --token-top-k 100 \
-  --concurrency 1
 ```
 
 `--insert-event-size`는 ColPali workload에서 event당 document 수다. 한 document의 token
-vector는 같은 insert event에 함께 들어간다.
+vector는 같은 insert event에 함께 들어간다. Multi-vector 실행 옵션은
+[Replay Guide](REPLAY.md)를 참고한다.
 
 ## Production-like Text Embedding
 
@@ -160,29 +133,10 @@ python vector_workload/generate_synthetic.py \
 
 python vector_workload/export_vectors.py verify \
   --artifact-dir "$RUN_DIR/artifact"
-
-python vector_workload/replay_milvus.py \
-  --artifact-dir "$RUN_DIR/artifact" \
-  --uri http://localhost:19530 \
-  --token root:Milvus \
-  --collection ragperf_diskann_100k_001 \
-  --result-file "$RUN_DIR/milvus/replay-result.json" \
-  --storage-path-note /MNTPNT/ragperf/milvus-data \
-  --insert-batch-size 10000 \
-  --index-type DISKANN \
-  --metric COSINE \
-  --search-list 100 \
-  --top-k 10 \
-  --warmup-queries 100 \
-  --concurrency 8
 ```
 
-Replayer는 checksum과 Parquet row count를 검증한 뒤 collection 생성, initial insert, flush,
-DISKANN index build, load, warm-up, measurement 순서로 실행한다. 결과 JSON에는 insert
-처리량, index 시간, replay QPS, latency p50/p90/p95/p99와 synthetic top-1 recall이 포함된다.
-
-기본값은 `delay_ms`를 무시하고 가능한 높은 부하를 만든다. 입력의 요청 간격을 재현하려면
-`--respect-delay`를 추가한다.
+Synthetic artifact의 expected neighbor와 top-1 recall 실행 방법은
+[Replay Guide](REPLAY.md)를 참고한다.
 
 ## Milvus Data Path Setup
 
@@ -200,8 +154,8 @@ common:
     BeamWidthRatio: 4
 ```
 
-`--storage-path-note`는 결과 JSON에 경로를 기록하는 메모일 뿐이며, replayer가 mount나
-Milvus 설정을 변경하지는 않는다.
+Target data path를 result에 기록하는 방법은 [Replay Guide](REPLAY.md)의
+`--storage-path-note` 설명을 참고한다.
 
 ## Experiment Checklist
 

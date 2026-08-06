@@ -1,8 +1,8 @@
 # Vector Workload Artifact Format
 
 이 문서는 exporter와 replayer 사이에서 사용하는 portable artifact contract를 정의한다.
-실행 명령은 [Workflow Guide](WORKFLOWS.md), 실험 조건과 결과 해석은
-[Benchmark Methodology](BENCHMARK_METHODOLOGY.md)를 참고한다.
+Artifact 생성은 [Record Guide](RECORD.md), 실행은 [Replay Guide](REPLAY.md), 실험 조건과 결과
+해석은 [Benchmark Methodology](BENCHMARK_METHODOLOGY.md)를 참고한다.
 
 ## Input JSONL
 

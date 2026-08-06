@@ -69,16 +69,17 @@ Smoke runner 자체는 `docker` command를 직접 실행하므로 현재 사용�
 bash vector_workload/run_docker_smoke.sh
 ```
 
-Milvus container를 직접 유지하거나 data volume을 보존하려면
-[Milvus Docker Setup](docs/DOCKER_MILVUS.md)을 참고한다. 기존 deployment에 artifact를 준비하고
-replay하는 절차는 [Workflow Guide](docs/WORKFLOWS.md)에 있다.
+실제 workload는 [Record Guide](docs/RECORD.md)에 따라 artifact로 기록하고,
+[Replay Guide](docs/REPLAY.md)에 따라 Milvus에서 실행한다. Milvus container를 직접 유지하거나
+data volume을 보존하려면 [Milvus Docker Setup](docs/DOCKER_MILVUS.md)을 참고한다.
 
 ## Documentation
 
-- [Workflow Guide](docs/WORKFLOWS.md): dataset preparation, embedding export, synthetic generation,
-  Milvus configuration, and replay commands
+- [Record Guide](docs/RECORD.md): corpus/query embedding, schedule recording, and artifact validation
+- [Replay Guide](docs/REPLAY.md): Milvus loading, DISKANN replay, options, and result output
+- [Workflow Guide](docs/WORKFLOWS.md): dataset-specific preparation and recording recipes
 - [Milvus Docker Setup](docs/DOCKER_MILVUS.md): validated Docker image, automatic smoke test,
-  persistent Compose deployment, workload replay, and cleanup
+  persistent Compose deployment, and cleanup
 - [Audio ASR Workflow](docs/AUDIO_ASR.md): audio transcription, text embedding, and mixed replay
 - [Artifact Format](docs/ARTIFACT_FORMAT.md): JSONL input, Parquet shards, manifest, schedule,
   checksums, and vector layout rules

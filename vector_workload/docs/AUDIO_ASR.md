@@ -89,23 +89,6 @@ Audio ASR artifact는 표준 `single_vector` layout을 사용한다. `corpus` sh
 
 ## Replay on Milvus
 
-Artifact를 GPU가 없는 target server로 옮긴 뒤 실행 중인 Milvus endpoint에 replay한다.
-
-```bash
-python vector_workload/replay_milvus.py \
-  --artifact-dir /MNTPNT/ragperf/audio/artifact \
-  --uri http://localhost:19530 \
-  --collection ragperf_audio_asr_001 \
-  --result-file /MNTPNT/ragperf/audio/replay-result.json \
-  --index-type DISKANN \
-  --metric COSINE \
-  --search-list 100 \
-  --top-k 10 \
-  --warmup-queries 100 \
-  --concurrency 1 \
-  --consistency-level Strong
-```
-
-Replayer는 checksum 검증, initial insert, DISKANN index build, load, warm-up과 mixed schedule
-순서로 실행한다. Scheduled insert 뒤의 search에서 새 row를 확인해야 하면 `Strong` consistency를
-사용한다.
+Artifact를 GPU가 없는 target server로 옮긴 뒤 [Replay Guide](REPLAY.md)의 표준 single-vector
+절차로 실행한다. 이 artifact는 `COSINE` metric을 사용한다. Scheduled insert 뒤의 search에서 새
+row를 확인해야 하면 기본값인 `Strong` consistency를 유지한다.
