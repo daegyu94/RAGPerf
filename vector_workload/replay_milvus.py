@@ -38,13 +38,15 @@ def percentile_summary(values_ms: list[float]) -> dict[str, float]:
     }
 
 
-def artifact_shards(manifest: dict[str, Any], artifact_dir: Path, kind: str) -> list[Path]:
+def artifact_shards(
+    manifest: dict[str, Any], artifact_dir: Path, kind: str, *, required: bool = True
+) -> list[Path]:
     paths = [
         artifact_dir / artifact["path"]
         for artifact in manifest["artifacts"]
         if artifact["kind"] == kind
     ]
-    if not paths:
+    if required and not paths:
         raise ValueError(f"artifact contains no {kind} shards")
     return paths
 
@@ -72,6 +74,16 @@ def iter_queries(paths: list[Path], max_queries: int | None) -> Iterator[dict[st
             emitted += 1
             if max_queries is not None and emitted >= max_queries:
                 return
+
+
+def iter_schedule(paths: list[Path]) -> Iterator[dict[str, Any]]:
+    for path in paths:
+        yield from iter_rows(path, ["sequence", "operation", "count"])
+
+
+def iter_corpus(paths: list[Path]) -> Iterator[dict[str, Any]]:
+    for path in paths:
+        yield from iter_rows(path, ["id", "text", "metadata_json", "vector"])
 
 
 def create_schema(dimension: int, max_payload_length: int) -> Any:
@@ -134,6 +146,43 @@ def insert_shard(
         "rows": rows,
         "seconds": seconds,
         "rows_per_second": rows / seconds if seconds else 0.0,
+    }
+
+
+def milvus_record(row: dict[str, Any], max_payload_length: int) -> dict[str, Any]:
+    record = {
+        "id": str(row["id"]),
+        "text": str(row["text"]),
+        "metadata_json": str(row["metadata_json"] or "{}"),
+        "vector": np.asarray(row["vector"], dtype=np.float32).tolist(),
+    }
+    for field in ("id", "text", "metadata_json"):
+        if len(record[field].encode("utf-8")) > max_payload_length:
+            raise ValueError(f"{record['id']}:{field} exceeds max_length={max_payload_length}")
+    return record
+
+
+def insert_event(
+    client: MilvusClient,
+    collection: str,
+    rows: Iterator[dict[str, Any]],
+    count: int,
+    max_payload_length: int,
+) -> dict[str, Any]:
+    records: list[dict[str, Any]] = []
+    for _ in range(count):
+        try:
+            row = next(rows)
+        except StopIteration as exc:
+            raise ValueError("schedule requests more insert rows than the artifact contains") from exc
+        records.append(milvus_record(row, max_payload_length))
+    started = time.perf_counter()
+    client.insert(collection_name=collection, data=records)
+    seconds = time.perf_counter() - started
+    return {
+        "rows": len(records),
+        "seconds": seconds,
+        "rows_per_second": len(records) / seconds if seconds else 0.0,
     }
 
 
@@ -208,7 +257,11 @@ def replay(args: argparse.Namespace) -> None:
     client.create_collection(collection_name=args.collection, schema=schema)
 
     corpus_paths = artifact_shards(manifest, artifact_dir, "corpus")
+    scheduled_insert_paths = artifact_shards(
+        manifest, artifact_dir, "inserts", required=False
+    )
     query_paths = artifact_shards(manifest, artifact_dir, "queries")
+    schedule_paths = artifact_shards(manifest, artifact_dir, "schedule", required=False)
     insert_started = time.perf_counter()
     insert_batches = [
         insert_shard(
@@ -245,18 +298,66 @@ def replay(args: argparse.Namespace) -> None:
         run_search(client, args.collection, query, args)
     warmup_seconds = time.perf_counter() - warmup_started
 
+    if schedule_paths:
+        schedule = list(iter_schedule(schedule_paths))
+    else:
+        schedule = [
+            {"sequence": index, "operation": "search", "count": 1}
+            for index in range(len(queries))
+        ]
+
     replay_started = time.perf_counter()
     query_results: list[dict[str, Any]] = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=args.concurrency) as executor:
-        futures: list[concurrent.futures.Future[dict[str, Any]]] = []
-        for query in queries:
-            if args.respect_delay and query["delay_ms"]:
-                time.sleep(query["delay_ms"] / 1000)
-            futures.append(
-                executor.submit(run_search, client, args.collection, query, args)
-            )
+    mixed_insert_results: list[dict[str, Any]] = []
+    query_iter = iter(queries)
+    scheduled_rows = iter_corpus(scheduled_insert_paths)
+
+    def collect_searches(
+        futures: list[concurrent.futures.Future[dict[str, Any]]],
+    ) -> None:
         for future in concurrent.futures.as_completed(futures):
             query_results.append(future.result())
+        futures.clear()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=args.concurrency) as executor:
+        futures: list[concurrent.futures.Future[dict[str, Any]]] = []
+        for event in schedule:
+            operation = event["operation"]
+            count = int(event["count"])
+            if operation == "search":
+                for _ in range(count):
+                    try:
+                        query = next(query_iter)
+                    except StopIteration:
+                        break
+                    if args.respect_delay and query["delay_ms"]:
+                        time.sleep(query["delay_ms"] / 1000)
+                    futures.append(
+                        executor.submit(run_search, client, args.collection, query, args)
+                    )
+                    if len(futures) >= args.concurrency:
+                        collect_searches(futures)
+            elif operation == "insert":
+                collect_searches(futures)
+                mixed_insert_results.append(
+                    insert_event(
+                        client,
+                        args.collection,
+                        scheduled_rows,
+                        count,
+                        args.max_payload_length,
+                    )
+                )
+            else:
+                raise ValueError(f"unsupported schedule operation: {operation}")
+        collect_searches(futures)
+
+    try:
+        next(scheduled_rows)
+    except StopIteration:
+        pass
+    else:
+        raise ValueError("schedule did not consume all scheduled insert rows")
     replay_seconds = time.perf_counter() - replay_started
 
     latencies = [result["latency_ms"] for result in query_results]
@@ -272,12 +373,12 @@ def replay(args: argparse.Namespace) -> None:
             "uri": args.uri,
             "database": args.database,
             "collection": args.collection,
-            "rows": inserted_rows,
+            "rows": inserted_rows + sum(item["rows"] for item in mixed_insert_results),
             "index_type": args.index_type,
             "metric": args.metric,
             "storage_path_note": args.storage_path_note,
         },
-        "insert": {
+        "initial_load": {
             "seconds": insert_seconds,
             "rows_per_second": inserted_rows / insert_seconds if insert_seconds else 0.0,
             "batches": insert_batches,
@@ -289,6 +390,10 @@ def replay(args: argparse.Namespace) -> None:
         },
         "replay": {
             "queries": len(query_results),
+            "insert_events": len(mixed_insert_results),
+            "inserted_rows": sum(item["rows"] for item in mixed_insert_results),
+            "insert_seconds": sum(item["seconds"] for item in mixed_insert_results),
+            "schedule_events": len(schedule),
             "concurrency": args.concurrency,
             "top_k": args.top_k,
             "metric": args.metric,

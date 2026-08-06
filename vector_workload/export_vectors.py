@@ -20,7 +20,24 @@ import torch
 import yaml
 from sentence_transformers import SentenceTransformer
 
-from artifact_utils import SCHEMA_VERSION, sha256_file, verify_artifact
+try:
+    from artifact_utils import SCHEMA_VERSION, sha256_file, verify_artifact
+except ModuleNotFoundError:  # Supports `python -m vector_workload.export_vectors`.
+    from vector_workload.artifact_utils import SCHEMA_VERSION, sha256_file, verify_artifact
+
+
+DEFAULT_EMBEDDING_MODEL = "BAAI/bge-m3"
+SMOKE_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+
+
+def resolve_model_name(smoke: bool, model_name: str | None) -> str:
+    """Resolve the default model while allowing an explicit model override."""
+    if model_name:
+        return model_name
+    if smoke:
+        return SMOKE_EMBEDDING_MODEL
+    return DEFAULT_EMBEDDING_MODEL
+
 
 def read_jsonl(path: Path, kind: str, limit: int | None) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
@@ -187,6 +204,76 @@ def write_shards(
     return artifacts
 
 
+def split_corpus_records(
+    records: list[dict[str, Any]],
+    vectors: np.ndarray,
+    initial_corpus_ratio: float,
+) -> tuple[list[dict[str, Any]], np.ndarray, list[dict[str, Any]], np.ndarray]:
+    """Split pre-embedded corpus rows into initial-load and scheduled-insert sets."""
+    if not 0 < initial_corpus_ratio <= 1:
+        raise ValueError("initial-corpus-ratio must satisfy 0 < ratio <= 1")
+    initial_count = len(records)
+    if initial_corpus_ratio < 1 and len(records) > 1:
+        initial_count = max(1, int(len(records) * initial_corpus_ratio))
+        initial_count = min(initial_count, len(records) - 1)
+    return (
+        records[:initial_count],
+        vectors[:initial_count],
+        records[initial_count:],
+        vectors[initial_count:],
+    )
+
+
+def write_schedule(
+    output_dir: Path,
+    query_count: int,
+    insert_count: int,
+    searches_per_insert: int,
+    insert_event_size: int,
+) -> dict[str, Any]:
+    """Write a bounded event stream consumed sequentially by the replayer."""
+    if searches_per_insert <= 0 or insert_event_size <= 0:
+        raise ValueError("searches-per-insert and insert-event-size must be positive")
+
+    operations: list[str] = []
+    counts: list[int] = []
+    remaining_inserts = insert_count
+    for query_index in range(query_count):
+        operations.append("search")
+        counts.append(1)
+        if (query_index + 1) % searches_per_insert == 0 and remaining_inserts:
+            count = min(insert_event_size, remaining_inserts)
+            operations.append("insert")
+            counts.append(count)
+            remaining_inserts -= count
+    while remaining_inserts:
+        count = min(insert_event_size, remaining_inserts)
+        operations.append("insert")
+        counts.append(count)
+        remaining_inserts -= count
+
+    path = output_dir / "schedule-00000.parquet"
+    pq.write_table(
+        pa.table(
+            {
+                "sequence": pa.array(range(len(operations)), type=pa.int64()),
+                "operation": pa.array(operations, type=pa.string()),
+                "count": pa.array(counts, type=pa.int32()),
+            }
+        ),
+        path,
+        compression="zstd",
+        use_dictionary=["operation"],
+    )
+    return {
+        "path": path.name,
+        "kind": "schedule",
+        "rows": len(operations),
+        "bytes": path.stat().st_size,
+        "sha256": sha256_file(path),
+    }
+
+
 def gpu_metadata(device: str) -> dict[str, Any] | None:
     if not device.startswith("cuda"):
         return None
@@ -214,6 +301,8 @@ def export_artifact(args: argparse.Namespace) -> None:
         raise ValueError("batch_size and rows_per_shard must be positive")
     output_dir = args.output_dir.resolve()
     ensure_empty_output_dir(output_dir)
+    model_name = resolve_model_name(args.smoke, args.model)
+    workload_mode = "smoke" if args.smoke else "default"
 
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -223,7 +312,7 @@ def export_artifact(args: argparse.Namespace) -> None:
     corpus_records = chunk_corpus(corpus_documents, args.chunk_size, args.chunk_overlap)
     query_records = read_jsonl(args.query_file, "query", args.max_queries)
 
-    encoder = load_encoder(args.model, args.revision, args.device)
+    encoder = load_encoder(model_name, args.revision, args.device)
     if hasattr(encoder, "get_embedding_dimension"):
         dimension = encoder.get_embedding_dimension()
     else:
@@ -237,11 +326,29 @@ def export_artifact(args: argparse.Namespace) -> None:
     if corpus_vectors.shape[1] != dimension or query_vectors.shape[1] != dimension:
         raise RuntimeError("encoder dimension does not match generated vectors")
 
-    artifacts = write_shards(
-        output_dir, "corpus", corpus_records, corpus_vectors, args.rows_per_shard
+    initial_records, initial_vectors, insert_records, insert_vectors = split_corpus_records(
+        corpus_records, corpus_vectors, args.initial_corpus_ratio
     )
+    artifacts = write_shards(
+        output_dir, "corpus", initial_records, initial_vectors, args.rows_per_shard
+    )
+    if insert_records:
+        artifacts.extend(
+            write_shards(
+                output_dir, "inserts", insert_records, insert_vectors, args.rows_per_shard
+            )
+        )
     artifacts.extend(
         write_shards(output_dir, "queries", query_records, query_vectors, args.rows_per_shard)
+    )
+    artifacts.append(
+        write_schedule(
+            output_dir,
+            len(query_records),
+            len(insert_records),
+            args.searches_per_insert,
+            args.insert_event_size,
+        )
     )
 
     manifest = {
@@ -268,7 +375,8 @@ def export_artifact(args: argparse.Namespace) -> None:
             "chunk_overlap": args.chunk_overlap,
         },
         "embedding": {
-            "model": args.model,
+            "mode": workload_mode,
+            "model": model_name,
             "revision": args.revision or "default",
             "device": args.device,
             "dimension": dimension,
@@ -283,9 +391,13 @@ def export_artifact(args: argparse.Namespace) -> None:
             "gpu": gpu_metadata(args.device),
         },
         "workload": {
-            "operation": "search",
-            "query_order": "queries parquet row order",
-            "timing": "delay_ms before each query",
+            "operation": "search_insert_mixed" if insert_records else "search",
+            "initial_corpus_rows": len(initial_records),
+            "scheduled_insert_rows": len(insert_records),
+            "schedule": "schedule parquet row order",
+            "searches_per_insert": args.searches_per_insert,
+            "insert_event_size": args.insert_event_size,
+            "timing": "query delay_ms before each search",
         },
         "artifacts": artifacts,
     }
@@ -307,8 +419,12 @@ def export_artifact(args: argparse.Namespace) -> None:
                 "output_dir": str(output_dir),
                 "corpus_documents": len(corpus_documents),
                 "corpus_vectors": len(corpus_records),
+                "initial_corpus_vectors": len(initial_records),
+                "scheduled_insert_vectors": len(insert_records),
                 "query_vectors": len(query_records),
                 "dimension": dimension,
+                "mode": workload_mode,
+                "model": model_name,
                 "dtype": args.dtype,
                 "device": args.device,
                 "artifact_bytes": sum(path.stat().st_size for path in output_dir.iterdir()),
@@ -327,7 +443,13 @@ def build_parser() -> argparse.ArgumentParser:
     export_parser.add_argument("--query-file", type=Path, required=True)
     export_parser.add_argument("--output-dir", type=Path, required=True)
     export_parser.add_argument(
-        "--model", default="sentence-transformers/all-MiniLM-L6-v2"
+        "--smoke",
+        action="store_true",
+        help="use the fast all-MiniLM-L6-v2 model instead of the default BAAI/bge-m3",
+    )
+    export_parser.add_argument(
+        "--model",
+        help="explicit Sentence Transformers model override for the selected mode",
     )
     export_parser.add_argument("--revision")
     export_parser.add_argument("--device", default="cuda:0")
@@ -339,6 +461,24 @@ def build_parser() -> argparse.ArgumentParser:
     export_parser.add_argument("--rows-per-shard", type=int, default=100_000)
     export_parser.add_argument("--max-corpus", type=int)
     export_parser.add_argument("--max-queries", type=int)
+    export_parser.add_argument(
+        "--initial-corpus-ratio",
+        type=float,
+        default=1.0,
+        help="fraction loaded before index build; the remainder is inserted during replay",
+    )
+    export_parser.add_argument(
+        "--searches-per-insert",
+        type=int,
+        default=1,
+        help="number of search events between scheduled insert events",
+    )
+    export_parser.add_argument(
+        "--insert-event-size",
+        type=int,
+        default=1,
+        help="maximum pre-embedded corpus rows inserted by one schedule event",
+    )
     export_parser.add_argument("--seed", type=int, default=42)
     export_parser.set_defaults(func=export_artifact)
 
