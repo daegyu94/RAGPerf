@@ -1,21 +1,45 @@
-# 이식 가능한 vector workload record/replay
+# Portable Vector Workload Preparation and Replay
 
 `vector_workload/`는 GPU 서버에서 재사용 가능한 vector artifact를 준비하고, target
 서버의 Milvus DISKANN에 이를 replay한다. Replay 경로는 RAGPerf의 vLLM, RAG pipeline,
 monitoring module을 import하지 않으므로 target 서버에 GPU가 없어도 된다.
 
-## 지원 workflow
+## Supported Workflows
 
-| Workflow | 준비 도구 | Replay |
+| Workflow | Preparation Tool | Replay |
 | --- | --- | --- |
 | Text embedding | `export_vectors.py` | Single-vector Milvus search/insert |
-| ColPali PDF image | `export_colpali.py` | MaxSim을 사용하는 multi-vector Milvus search |
-| Synthetic vector | `record_synthetic.py` | 선택적 top-1 recall을 포함한 single-vector Milvus search |
+| Audio ASR + text embedding | `prepare_workloads.py audio-asr`, then `export_vectors.py` | Single-vector Milvus search/insert |
+| ColPali PDF image | `export_colpali.py` | Multi-vector Milvus search with MaxSim |
+| Synthetic baseline | `generate_synthetic.py` | Optional single-vector validation with top-1 recall |
 
 현재 standalone replayer의 기준 backend는 Milvus DISKANN이다. Milvus를 자동으로 배포하거나
 host, filesystem, network, server-side storage metric을 수집하지는 않는다.
 
-## 빠른 시작
+## How It Works
+
+Embedding 생성과 VectorDB 실행을 분리한다. Preparation server에서는 corpus/query vector와
+request schedule을 portable artifact로 만들고, target server에서는 이 artifact를 Milvus에
+직접 제출한다.
+
+```text
+corpus + queries
+       ↓
+embedding or synthetic generation
+       ↓
+Parquet artifact + manifest + checksums
+       ↓
+transfer to target server
+       ↓
+Milvus insert → index → replay → result JSON
+```
+
+이 구조는 embedding device와 model 실행 시간을 VectorDB 결과에서 제외하고, 동일한 logical
+workload를 여러 deployment에서 재사용하기 위한 것이다. 현재 replayer는 실제 application API
+traffic을 기록하지 않으며, production traffic을 모델링하는 duration/arrival scheduler나
+update/delete workload를 제공하지 않는다.
+
+## Quick Start
 
 모든 명령은 repository root에서 실행한다. 먼저 project-local environment를 준비한다.
 
@@ -61,17 +85,18 @@ python vector_workload/replay_milvus.py \
   --concurrency 1
 ```
 
-Exporter는 기존 output directory를 덮어쓰지 않는다. Artifact와 replay result마다 새로운
-directory를 사용한다.
+Preparation tool은 비어 있지 않은 output directory를 덮어쓰지 않으며, replayer는 기존 result
+file이나 Milvus collection을 덮어쓰지 않는다. 실행마다 새 경로와 collection 이름을 사용한다.
 
-## 문서
+## Documentation
 
-- [실행 가이드](docs/WORKFLOWS.md): dataset 준비, embedding export, synthetic record,
-  Milvus 설정과 replay 명령
-- [Artifact 형식](docs/ARTIFACT_FORMAT.md): JSONL 입력, Parquet shard, manifest, schedule,
-  checksum과 vector layout 규칙
-- [설계 문서](docs/DESIGN.md): 범위, benchmark 방법론, storage 결과 해석과 roadmap
+- [Workflow Guide](docs/WORKFLOWS.md): dataset preparation, embedding export, synthetic generation,
+  Milvus configuration, and replay commands
+- [Audio ASR Workflow](docs/AUDIO_ASR.md): audio transcription, text embedding, and mixed replay
+- [Artifact Format](docs/ARTIFACT_FORMAT.md): JSONL input, Parquet shards, manifest, schedule,
+  checksums, and vector layout rules
+- [Benchmark Methodology](docs/BENCHMARK_METHODOLOGY.md): measurement boundaries, fair comparison
+  rules, required metadata, and result interpretation
 
 `examples/`에는 작은 JSONL 입력 예제가 있다. Wikipedia/Natural Questions, arXiv PDF,
-ColPali, production-like workload와 큰 synthetic workload 예시는 [실행 가이드](docs/WORKFLOWS.md)를
-참고한다.
+ColPali, Audio ASR, production-like workload와 큰 synthetic workload 예시는 위 문서를 참고한다.

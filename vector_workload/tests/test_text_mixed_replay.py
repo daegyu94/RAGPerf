@@ -9,6 +9,7 @@ from unittest import mock
 
 import numpy as np
 import pyarrow.parquet as pq
+import yaml
 
 from vector_workload import export_vectors, prepare_workloads, replay_milvus
 
@@ -162,6 +163,9 @@ class TextMixedReplayTest(unittest.TestCase):
             with mock.patch.object(export_vectors, "load_encoder", return_value=FakeEncoder()):
                 export_vectors.export_artifact(export_args(corpus, queries, artifact_dir))
 
+            with (artifact_dir / "workload-manifest.yaml").open(encoding="utf-8") as stream:
+                manifest = yaml.safe_load(stream)
+            self.assertEqual(manifest["embedding"]["vector_layout"], "single_vector")
             schedule = pq.read_table(artifact_dir / "schedule-00000.parquet").to_pydict()
             self.assertEqual(schedule["operation"], ["search", "insert", "search", "insert"])
             result_file = root / "result.json"

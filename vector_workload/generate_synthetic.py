@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Record a bounded-memory synthetic vector workload artifact."""
+"""Generate a sharded synthetic vector workload artifact."""
 
 from __future__ import annotations
 
@@ -16,7 +16,10 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import yaml
 
-from artifact_utils import SCHEMA_VERSION, sha256_file, verify_artifact
+try:
+    from artifact_utils import SCHEMA_VERSION, sha256_file, verify_artifact
+except ModuleNotFoundError:  # Supports `python -m vector_workload.generate_synthetic`.
+    from vector_workload.artifact_utils import SCHEMA_VERSION, sha256_file, verify_artifact
 
 
 def normalized_random_vectors(
@@ -50,7 +53,7 @@ def ensure_empty_output_dir(path: Path) -> None:
         raise FileExistsError(f"output directory must be empty: {path}")
 
 
-def record(args: argparse.Namespace) -> None:
+def generate(args: argparse.Namespace) -> None:
     if args.corpus_count <= 0 or args.query_count <= 0:
         raise ValueError("corpus-count and query-count must be positive")
     if args.dimension <= 0 or args.rows_per_shard <= 0:
@@ -90,7 +93,7 @@ def record(args: argparse.Namespace) -> None:
             {
                 "id": pa.array(ids, type=pa.string()),
                 "text": pa.array(
-                    [f"Synthetic vector record {row}" for row in range(start, start + rows)],
+                    [f"Synthetic vector {row}" for row in range(start, start + rows)],
                     type=pa.string(),
                 ),
                 "metadata_json": pa.array(
@@ -152,7 +155,7 @@ def record(args: argparse.Namespace) -> None:
     manifest = {
         "schema_version": SCHEMA_VERSION,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "producer": "vector_workload/record_synthetic.py",
+        "producer": "vector_workload/generate_synthetic.py",
         "inputs": {
             "corpus": {
                 "generator": "normalized_gaussian",
@@ -173,6 +176,7 @@ def record(args: argparse.Namespace) -> None:
             "dimension": args.dimension,
             "dtype": args.dtype,
             "normalized": True,
+            "vector_layout": "single_vector",
             "batch_size": args.rows_per_shard,
             "seed": args.seed,
             "corpus_seconds": corpus_seconds,
@@ -212,7 +216,7 @@ def record(args: argparse.Namespace) -> None:
                 "dtype": args.dtype,
                 "parquet_shards": len(artifacts),
                 "artifact_bytes": sum(path.stat().st_size for path in output_dir.iterdir()),
-                "record_seconds": total_seconds,
+                "generation_seconds": total_seconds,
             },
             indent=2,
         )
@@ -235,7 +239,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     try:
-        record(build_parser().parse_args())
+        generate(build_parser().parse_args())
     except Exception as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

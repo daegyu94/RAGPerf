@@ -382,6 +382,7 @@ def export_artifact(args: argparse.Namespace) -> None:
             "dimension": dimension,
             "dtype": args.dtype,
             "normalized": args.normalize,
+            "vector_layout": "single_vector",
             "batch_size": args.batch_size,
             "seed": args.seed,
             "corpus_seconds": corpus_seconds,

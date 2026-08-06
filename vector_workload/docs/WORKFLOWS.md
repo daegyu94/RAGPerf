@@ -1,10 +1,10 @@
-# Vector workload 실행 가이드
+# Vector Workload Workflow Guide
 
-이 문서는 [README](../README.md)의 빠른 시작보다 큰 workload를 준비하고 Milvus DISKANN에서
-replay하는 방법을 설명한다. 입력과 artifact의 의미는 [Artifact 형식](ARTIFACT_FORMAT.md)을
+이 문서는 [README](../README.md)의 Quick Start보다 큰 workload를 준비하고 Milvus DISKANN에서
+replay하는 방법을 설명한다. 입력과 artifact의 의미는 [Artifact Format](ARTIFACT_FORMAT.md)을
 참고한다.
 
-## 환경 준비
+## Environment Setup
 
 Embedding exporter와 ColPali exporter는 GPU 서버에서 실행한다. Target Milvus 서버에서
 replay할 때 사용하는 package는 `pyarrow`, `PyYAML`, `numpy`, `pymilvus`다.
@@ -46,7 +46,7 @@ python vector_workload/export_vectors.py export \
   --insert-event-size 100
 ```
 
-## arXiv PDF text
+## arXiv PDF Text
 
 Preparer는 PDF page text를 추출하고, exporter는 deterministic character chunking과
 embedding을 수행한다.
@@ -70,7 +70,7 @@ python vector_workload/export_vectors.py export \
   --insert-event-size 100
 ```
 
-## arXiv PDF image + ColPali
+## arXiv PDF Images + ColPali
 
 ColPali exporter는 PDF page image와 query text를 multi-vector로 변환한다. Artifact에는
 image 자체가 아니라 vector와 document/query grouping metadata가 저장된다. Replayer는
@@ -109,7 +109,7 @@ python vector_workload/replay_milvus.py \
 `--insert-event-size`는 ColPali workload에서 event당 document 수다. 한 document의 token
 vector는 같은 insert event에 함께 들어간다.
 
-## Production-like text embedding
+## Production-like Text Embedding
 
 실제 corpus와 query에서는 `--smoke`를 생략한다. 기본값인 `BAAI/bge-m3`를 사용할 경우
 대개 1024차원 vector가 생성되므로, target collection의 dimension을 manifest와 맞춘다.
@@ -128,18 +128,27 @@ python vector_workload/export_vectors.py export \
 동일한 artifact를 여러 target에서 비교하려면 model/revision, chunking, normalization,
 dtype을 고정한다.
 
-## Synthetic vector record/replay
+## Audio ASR + Text Embedding
 
-Embedding model 성능과 VectorDB I/O를 분리할 때 synthetic workload를 사용한다.
-`record_synthetic.py`는 정규화된 vector를 bounded memory로 Parquet shard에 record한다.
+Local audio를 ASR transcript corpus로 준비한 뒤 표준 text exporter와 mixed schedule을
+사용할 수 있다. 지원 형식, provenance metadata와 전체 명령은
+[Audio ASR Workflow](AUDIO_ASR.md)를 참고한다.
+
+## Synthetic Workload Generation
+
+Embedding model 성능과 VectorDB I/O를 분리하거나 artifact/replay 경로를 검증할 때 선택적으로
+synthetic workload를 사용한다. `generate_synthetic.py`는 corpus vector를
+`--rows-per-shard` 단위로 생성하고, query 생성에 필요한 anchor vector는 memory에 유지한다.
+따라서 peak memory는 corpus 전체가 아니라 shard와 query 수에 비례한다.
 각 query는 corpus vector에 작은 noise를 더해 만들며,
 `metadata_json.expected_id`에 예상 top-1 ID를 기록한다. 이 workload는 VectorDB I/O 검증용이며
-embedding 품질 평가용이 아니다.
+embedding 품질이나 production traffic의 대표성을 평가하지 않는다. 실제 application API
+traffic을 기록하는 recorder도 아니다.
 
 ```bash
 RUN_DIR=/MNTPNT/ragperf/vector-workload-100k-001
 
-python vector_workload/record_synthetic.py \
+python vector_workload/generate_synthetic.py \
   --output-dir "$RUN_DIR/artifact" \
   --corpus-count 100000 \
   --query-count 2000 \
@@ -175,7 +184,7 @@ DISKANN index build, load, warm-up, measurement 순서로 실행한다. 결과 J
 기본값은 `delay_ms`를 무시하고 가능한 높은 부하를 만든다. 입력의 요청 간격을 재현하려면
 `--respect-delay`를 추가한다.
 
-## Milvus data path 준비
+## Milvus Data Path Setup
 
 Milvus는 embedded database가 아니다. Standalone 또는 Cluster의 QueryNode와 IndexNode data
 path를 대상 mount에 연결하고, QueryNode에서 disk index를 활성화한다.
@@ -191,16 +200,8 @@ common:
 `--storage-path-note`는 결과 JSON에 경로를 기록하는 메모일 뿐이며, replayer가 mount나
 Milvus 설정을 변경하지는 않는다.
 
-## 실험 체크리스트
+## Experiment Checklist
 
-- Artifact와 Milvus data path가 모두 의도한 mount 아래에 있는지 확인한다.
-- Dataset size, dimension/dtype, model/revision, index parameter, `top_k`, concurrency,
-  warm-up과 측정 시간을 고정한다.
-- Cold/warm cache 상태를 결과와 함께 기록한다.
-- Backend를 비교할 때 같은 artifact를 재사용하고, 매 replay마다 새 collection과 result
-  file을 사용한다.
-- Client metric만으로 storage 성능을 단정하지 말고 Milvus와 storage server metric을
-  별도로 수집한다.
-
-현재 standalone runner의 상세 범위와 해석상의 주의사항은 [설계 문서](DESIGN.md)에 정리되어
-있다.
+Backend 비교 전에는 [Benchmark Methodology](BENCHMARK_METHODOLOGY.md)의 비교 규칙과 필수
+metadata를 확인한다. 이 문서는 실행 절차만 다루며, measurement boundary와 결과 해석의 기준은
+Benchmark Methodology를 따른다.
