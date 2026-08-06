@@ -27,11 +27,16 @@ python vector_workload/prepare_workloads.py wikipedia-nq \
 python vector_workload/record_workload.py text \
   --corpus-file /MNTPNT/ragperf/wikipedia-nq/input/corpus.jsonl \
   --query-file /MNTPNT/ragperf/wikipedia-nq/input/queries.jsonl \
-  --output-dir /MNTPNT/ragperf/wikipedia-nq \
+  --output-dir /MNTPNT/ragperf/wikipedia-nq/record \
   --initial-corpus-ratio 0.8 \
   --searches-per-insert 10 \
   --insert-event-size 100
 ```
+
+`--corpus-count`는 원본 Wikipedia document 수이며 최종 vector row 수가 아니다. Text chunking
+후의 실제 row 수와 1TB 수준의 scale 계산은 [Record Guide](RECORD.md#estimate-dataset-and-storage-size)의
+pilot 절차를 따른다. `input`은 보관하고 `record`를 새 directory로 만들어 다른 model이나
+schedule을 반복할 수 있다.
 
 ## arXiv PDF Text
 
@@ -47,7 +52,7 @@ python vector_workload/prepare_workloads.py arxiv-pdf-text \
 python vector_workload/record_workload.py text \
   --corpus-file /MNTPNT/ragperf/arxiv-text/input/corpus.jsonl \
   --query-file /MNTPNT/ragperf/arxiv-text/input/queries.jsonl \
-  --output-dir /MNTPNT/ragperf/arxiv-text
+  --output-dir /MNTPNT/ragperf/arxiv-text/record
 ```
 
 Custom chunk size나 model revision이 필요하면 [Record Guide](RECORD.md)의 Text Embedding
@@ -67,14 +72,34 @@ python vector_workload/prepare_workloads.py arxiv-pdf-image \
 python vector_workload/record_workload.py colpali \
   --pdf-dir /MNTPNT/ragperf/arxiv/pdfs \
   --query-file /MNTPNT/ragperf/arxiv/queries.jsonl \
-  --output-dir /MNTPNT/ragperf/arxiv-image \
+  --output-dir /MNTPNT/ragperf/arxiv-image/record \
   --max-pdfs 10000
 ```
 
 `record_workload.py colpali`가 PDF rendering을 포함하므로, 위 예시에서 별도의
 `arxiv-pdf-image` preparation 단계는 input을 미리 확인하거나 재사용할 때만 필요하다. 일반적인
-실행에서는 두 번째 command만 사용해도 된다. ColPali artifact는 document/token grouping을
-보존하며 Replay Guide가 `IP` metric과 multi-vector replay를 자동 선택한다.
+실행에서는 두 번째 command만 사용해도 된다. `--max-pdfs`는 PDF 파일 수의 상한이며 실제
+corpus document 수는 PDF page 수다. 한 page가 여러 token vector로 평탄화되므로 artifact row
+수는 page 수보다 더 많다. Page 수와 실제 multi-vector row 수를 이용한 scale 계산은
+[Record Guide](RECORD.md#colpali-pdf-image)의 pilot 절차를 따른다. ColPali artifact는
+document/token grouping을 보존하며 Replay Guide가 `IP` metric과 multi-vector replay를 자동
+선택한다.
+
+이미 render한 page image를 재사용하려면 high-level wrapper가 PDF를 다시 render하므로, 준비된
+`corpus.jsonl`을 low-level exporter에 직접 전달한다.
+
+```bash
+python vector_workload/export_colpali.py \
+  --corpus-file /MNTPNT/ragperf/arxiv-image/input/corpus.jsonl \
+  --query-file /MNTPNT/ragperf/arxiv-image/input/queries.jsonl \
+  --output-dir /MNTPNT/ragperf/arxiv-image/record/artifact \
+  --model vidore/colpali-v1.2 \
+  --device cuda:0 \
+  --batch-size 1
+
+python vector_workload/export_vectors.py verify \
+  --artifact-dir /MNTPNT/ragperf/arxiv-image/record/artifact
+```
 
 ## Audio ASR + Text Embedding
 
@@ -92,7 +117,8 @@ ffmpeg -version
 python vector_workload/record_workload.py audio-asr \
   --audio-dir /MNTPNT/ragperf/audio/files \
   --query-file /MNTPNT/ragperf/audio/queries.jsonl \
-  --output-dir /MNTPNT/ragperf/audio
+  --output-dir /MNTPNT/ragperf/audio/record \
+  --max-audio-files 100
 ```
 
 기본 ASR model은 `openai/whisper-small`, text embedding model은 `BAAI/bge-m3`이며 둘 다
@@ -109,7 +135,11 @@ python vector_workload/record_workload.py audio-asr \
 Corpus metadata에는 원본 audio의 상대 경로와 SHA-256, ASR model/revision/language가 기록된다.
 Raw audio 자체는 artifact에 복사되지 않는다. 동일한 artifact를 재현하려면 ASR와 text embedding
 model revision, language, chunking, normalization과 dtype을 고정한다. 결과는 `audio/artifact`에
-저장되며 [Replay Guide](REPLAY.md)의 Audio ASR 예시로 실행한다.
+저장되며 [Replay Guide](REPLAY.md)의 Audio ASR 예시로 실행한다. 위 예시에서는
+`audio/record/artifact`에 저장된다. `--max-audio-files`는 pilot
+크기를 제한할 뿐이며, 실제 vector row 수는 transcript 길이와 text chunking에 따라 결정된다.
+먼저 100~1,000개 audio를 record해 manifest의 `inputs.corpus.chunks`를 확인한 뒤 파일 수를
+확대한다. Audio 파일 자체의 저장 공간과 artifact 저장 공간은 별도로 계산한다.
 
 ## Synthetic Workload
 
@@ -129,6 +159,11 @@ python vector_workload/generate_synthetic.py \
   --query-noise 0.01 \
   --seed 42
 ```
+
+Synthetic은 `--corpus-count`가 곧 corpus vector row 수이므로 다른 workload보다 1TB scale을
+직접 조절하기 쉽다. Dimension과 dtype에 따른 raw vector 계산 및 Milvus 여유 공간은
+[Record Guide](RECORD.md#synthetic)의 표를 기준으로 한다. Synthetic은 embedding 품질이나
+실제 document chunk 분포를 평가하지 않으며, 대규모 I/O와 index 경로를 검증할 때 사용한다.
 
 생성된 artifact는 [Artifact Format](ARTIFACT_FORMAT.md)의 contract를 따르며,
 [Replay Guide](REPLAY.md)의 공통 replay command에 `artifact` 경로를 전달한다.
