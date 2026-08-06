@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import itertools
 import json
+import shutil
 import sys
 from pathlib import Path
 from typing import Any, Callable, Iterable
@@ -103,6 +104,79 @@ def prepare_wikipedia_nq(
     return result
 
 
+def pdf_text_rows(
+    pdf_paths: Iterable[Path],
+    reader_factory: Callable[[Path], Any] | None = None,
+) -> Iterable[dict[str, Any]]:
+    if reader_factory is None:
+        from pypdf import PdfReader
+
+        reader_factory = PdfReader
+    for path in pdf_paths:
+        reader = reader_factory(path)
+        page_texts = [page.extract_text() or "" for page in reader.pages]
+        text = "\n\n".join(part.strip() for part in page_texts if part.strip())
+        if not text:
+            continue
+        yield {
+            "id": path.stem,
+            "text": text,
+            "metadata": {
+                "dataset": "common-pile/arxiv_papers",
+                "source_file": path.name,
+                "pages": len(reader.pages),
+                "modality": "text",
+            },
+        }
+
+
+def validate_query_file(path: Path) -> int:
+    count = 0
+    with path.open("r", encoding="utf-8") as stream:
+        for line_number, line in enumerate(stream, start=1):
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"{path}:{line_number}: invalid JSON: {exc}") from exc
+            if not isinstance(row, dict) or not isinstance(row.get("text"), str):
+                raise ValueError(f"{path}:{line_number}: query requires string 'text'")
+            count += 1
+    if not count:
+        raise ValueError(f"{path}: no queries found")
+    return count
+
+
+def prepare_arxiv_pdf_text(
+    args: argparse.Namespace,
+    reader_factory: Callable[[Path], Any] | None = None,
+) -> dict[str, Any]:
+    if args.max_pdfs is not None and args.max_pdfs <= 0:
+        raise ValueError("max-pdfs must be positive")
+    pdf_paths = sorted(args.pdf_dir.rglob("*.pdf"))
+    if args.max_pdfs is not None:
+        pdf_paths = pdf_paths[: args.max_pdfs]
+    if not pdf_paths:
+        raise ValueError(f"no PDF files found under {args.pdf_dir}")
+    query_count = validate_query_file(args.query_file)
+
+    output_dir = args.output_dir.resolve()
+    ensure_empty_output_dir(output_dir)
+    corpus_count = write_jsonl(
+        output_dir / "corpus.jsonl", pdf_text_rows(pdf_paths, reader_factory)
+    )
+    shutil.copyfile(args.query_file, output_dir / "queries.jsonl")
+    result = {
+        "workload": "arxiv-pdf-text",
+        "output_dir": str(output_dir),
+        "pdf_documents": corpus_count,
+        "queries": query_count,
+    }
+    print(json.dumps(result, indent=2))
+    return result
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -113,6 +187,14 @@ def build_parser() -> argparse.ArgumentParser:
     wikipedia_parser.add_argument("--corpus-count", type=int, required=True)
     wikipedia_parser.add_argument("--query-count", type=int, required=True)
     wikipedia_parser.set_defaults(func=prepare_wikipedia_nq)
+    arxiv_text_parser = subparsers.add_parser(
+        "arxiv-pdf-text", help="extract text from local arXiv PDF files"
+    )
+    arxiv_text_parser.add_argument("--pdf-dir", type=Path, required=True)
+    arxiv_text_parser.add_argument("--query-file", type=Path, required=True)
+    arxiv_text_parser.add_argument("--output-dir", type=Path, required=True)
+    arxiv_text_parser.add_argument("--max-pdfs", type=int)
+    arxiv_text_parser.set_defaults(func=prepare_arxiv_pdf_text)
     return parser
 
 

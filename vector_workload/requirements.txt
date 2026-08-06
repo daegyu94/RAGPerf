@@ -3,6 +3,7 @@ pyarrow>=16
 PyYAML>=6
 sentence-transformers>=3
 datasets>=3
+pypdf>=6
 torch>=2.3
 # Milvus DISKANN replay adapter.
 pymilvus>=2.4,<3

@@ -128,6 +128,33 @@ python vector_workload/export_vectors.py export \
   --insert-event-size 100
 ```
 
+## arXiv PDF text
+
+다운로드한 `common-pile/arxiv_papers` PDF와 workload query JSONL을 준비한다. Preparer는
+PDF page text를 추출하고 exporter가 deterministic chunking과 embedding을 수행한다.
+
+```bash
+python vector_workload/prepare_workloads.py arxiv-pdf-text \
+  --pdf-dir /mnt/{mountpoint}/ragperf/arxiv/pdfs \
+  --query-file /mnt/{mountpoint}/ragperf/arxiv/queries.jsonl \
+  --output-dir /mnt/{mountpoint}/ragperf/arxiv-text/input \
+  --max-pdfs 10000
+
+python vector_workload/export_vectors.py export \
+  --corpus-file /mnt/{mountpoint}/ragperf/arxiv-text/input/corpus.jsonl \
+  --query-file /mnt/{mountpoint}/ragperf/arxiv-text/input/queries.jsonl \
+  --output-dir /mnt/{mountpoint}/ragperf/arxiv-text/artifact \
+  --device cuda:0 \
+  --chunk-size 512 \
+  --chunk-overlap 0 \
+  --initial-corpus-ratio 0.8 \
+  --searches-per-insert 10 \
+  --insert-event-size 100
+```
+
+생성된 artifact는 위 smoke 예시와 같은 `replay_milvus.py` 명령으로 GPU 없는 Milvus
+server에서 initial insert, DISKANN index build와 mixed search/insert를 실행한다.
+
 ## Production-like embedding workload
 
 실제 corpus/query에서 text embedding을 생성할 때는 `--smoke` 없이 실행한다. 아래
