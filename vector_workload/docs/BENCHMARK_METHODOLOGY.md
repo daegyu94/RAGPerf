@@ -2,7 +2,7 @@
 
 이 문서는 `vector_workload/`로 VectorDB 또는 storage deployment를 비교할 때의 measurement
 boundary, 실험 조건과 결과 해석 기준을 정의한다. 실행 명령은
-[Workflow Guide](WORKFLOWS.md), artifact contract는 [Artifact Format](ARTIFACT_FORMAT.md)을
+[Dataset Workflows](DATASET_WORKFLOWS.md), artifact contract는 [Artifact Format](ARTIFACT_FORMAT.md)을
 참고한다.
 
 ## Measurement Boundary

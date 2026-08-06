@@ -76,14 +76,14 @@ data volume을 보존하려면 [Milvus Docker Setup](docs/DOCKER_MILVUS.md)을 �
 
 - [Record Guide](docs/RECORD.md): corpus/query embedding, schedule recording, and artifact validation
 - [Replay Guide](docs/REPLAY.md): Milvus loading, DISKANN replay, options, and result output
-- [Workflow Guide](docs/WORKFLOWS.md): dataset-specific preparation and recording recipes
+- [Dataset Workflows](docs/DATASET_WORKFLOWS.md): dataset-specific input preparation and connection examples
 - [Milvus Docker Setup](docs/DOCKER_MILVUS.md): validated Docker image, automatic smoke test,
   persistent Compose deployment, and cleanup
-- [Audio ASR Workflow](docs/AUDIO_ASR.md): audio transcription, text embedding, and mixed replay
 - [Artifact Format](docs/ARTIFACT_FORMAT.md): JSONL input, Parquet shards, manifest, schedule,
   checksums, and vector layout rules
 - [Benchmark Methodology](docs/BENCHMARK_METHODOLOGY.md): measurement boundaries, fair comparison
   rules, required metadata, and result interpretation
 
-`examples/`에는 작은 JSONL 입력 예제가 있다. Wikipedia/Natural Questions, arXiv PDF,
-ColPali, Audio ASR, production-like workload와 큰 synthetic workload 예시는 위 문서를 참고한다.
+`examples/`에는 작은 JSONL 입력 예제가 있다. Wikipedia/Natural Questions, arXiv PDF, ColPali,
+Audio ASR, production-like workload와 큰 synthetic workload 예시는 [Dataset Workflows](docs/DATASET_WORKFLOWS.md)를
+참고한다.

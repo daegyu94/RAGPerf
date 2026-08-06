@@ -108,6 +108,10 @@ def record_audio_asr(args: argparse.Namespace, runner: CommandRunner = run_comma
     add_option(prepare, "--revision", args.asr_revision)
     add_option(prepare, "--language", args.language)
     add_option(prepare, "--max-audio-files", args.max_audio_files)
+    add_option(prepare, "--chunk-length-seconds", args.chunk_length_seconds)
+    add_option(prepare, "--dataset-name", args.dataset_name)
+    if args.audio_extensions:
+        prepare.extend(("--audio-extensions", *args.audio_extensions))
     runner(prepare)
 
     export = [
@@ -209,6 +213,9 @@ def build_parser() -> argparse.ArgumentParser:
     audio.add_argument("--asr-batch-size", type=int, default=8)
     audio.add_argument("--language")
     audio.add_argument("--max-audio-files", type=int)
+    audio.add_argument("--chunk-length-seconds", type=float)
+    audio.add_argument("--audio-extensions", nargs="+")
+    audio.add_argument("--dataset-name")
     audio.add_argument("--embedding-model")
     audio.add_argument("--embedding-revision")
     audio.add_argument("--embedding-device", default="cuda:0")

@@ -12,7 +12,7 @@ Parquet shards + manifest + checksums
 ```
 
 Artifact 구조와 입력 schema의 기준은 [Artifact Format](ARTIFACT_FORMAT.md)에 있다. Wikipedia,
-arXiv, Audio ASR 같은 dataset별 input 준비 방법은 [Workflow Guide](WORKFLOWS.md)를 참고한다.
+arXiv, Audio ASR 같은 dataset별 input 준비 방법은 [Dataset Workflows](DATASET_WORKFLOWS.md)를 참고한다.
 
 ## Environment
 
@@ -57,7 +57,7 @@ python vector_workload/record_workload.py audio-asr \
 
 기본 ASR model은 `openai/whisper-small`, embedding model은 `BAAI/bge-m3`이며 둘 다 `cuda:0`을
 사용한다. 다른 device가 필요하면 `--asr-device`와 `--embedding-device`를 각각 지정한다.
-지원 audio 형식과 transcript metadata는 [Audio ASR Workflow](AUDIO_ASR.md)에 있다.
+Audio input 규칙과 transcript metadata는 [Dataset Workflows](DATASET_WORKFLOWS.md)에 있다.
 
 ### ColPali PDF Image
 
@@ -130,7 +130,7 @@ normalization, dtype과 seed는 manifest에 기록된다. 여러 target을 비�
 ## Synthetic Baseline
 
 `generate_synthetic.py`는 embedding model 없이 deterministic artifact를 기록한다. Synthetic
-workload의 크기와 dimension을 직접 지정하는 예시는 [Workflow Guide](WORKFLOWS.md)에 있다.
+workload의 크기와 dimension을 직접 지정하는 예시는 [Dataset Workflows](DATASET_WORKFLOWS.md)에 있다.
 
-상위 CLI가 제공하지 않는 세부 option이나 dataset별 preparation은 [Workflow Guide](WORKFLOWS.md)에
+상위 CLI가 제공하지 않는 세부 option이나 dataset별 preparation은 [Dataset Workflows](DATASET_WORKFLOWS.md)에
 있다. 기록을 마쳤으면 [Replay Guide](REPLAY.md)에 따라 artifact를 Milvus에서 실행한다.
