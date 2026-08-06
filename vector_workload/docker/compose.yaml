@@ -1,0 +1,29 @@
+services:
+  milvus:
+    image: milvusdb/milvus:v2.6.18
+    command: ["milvus", "run", "standalone"]
+    security_opt:
+      - seccomp=unconfined
+    environment:
+      ETCD_USE_EMBED: "true"
+      ETCD_DATA_DIR: /var/lib/milvus/etcd
+      ETCD_CONFIG_PATH: /milvus/configs/embedEtcd.yaml
+      COMMON_STORAGETYPE: local
+      DEPLOY_MODE: STANDALONE
+    volumes:
+      - milvus-data:/var/lib/milvus
+      - ./embed-etcd.yaml:/milvus/configs/embedEtcd.yaml:ro
+      - ./milvus-user.yaml:/milvus/configs/user.yaml:ro
+    ports:
+      - "127.0.0.1:19530:19530"
+      - "127.0.0.1:9091:9091"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 5s
+      timeout: 10s
+      start_period: 60s
+      retries: 12
+    restart: unless-stopped
+
+volumes:
+  milvus-data:

@@ -13,8 +13,7 @@ monitoring module을 import하지 않으므로 target 서버에 GPU가 없어도
 | ColPali PDF image | `export_colpali.py` | Multi-vector Milvus search with MaxSim |
 | Synthetic baseline | `generate_synthetic.py` | Optional single-vector validation with top-1 recall |
 
-현재 standalone replayer의 기준 backend는 Milvus DISKANN이다. Milvus를 자동으로 배포하거나
-host, filesystem, network, server-side storage metric을 수집하지는 않는다.
+현재 standalone replayer의 기준 backend는 Milvus DISKANN이다.
 
 ## How It Works
 
@@ -35,9 +34,8 @@ Milvus insert → index → replay → result JSON
 ```
 
 이 구조는 embedding device와 model 실행 시간을 VectorDB 결과에서 제외하고, 동일한 logical
-workload를 여러 deployment에서 재사용하기 위한 것이다. 현재 replayer는 실제 application API
-traffic을 기록하지 않으며, production traffic을 모델링하는 duration/arrival scheduler나
-update/delete workload를 제공하지 않는다.
+workload를 여러 deployment에서 재사용하기 위한 것이다. Replayer는 실제 API traffic trace가
+아니라 artifact에 정의된 logical workload를 재생한다.
 
 ## Quick Start
 
@@ -49,49 +47,38 @@ source .venv/bin/activate
 uv pip install -r vector_workload/requirements.txt
 ```
 
-작은 text-embedding artifact를 생성하고 검증한다.
+### Docker Smoke Test
+
+Smoke runner는 Milvus 2.6.18 image를 내려받아 DISKANN을 활성화한 임시 container를 시작하고,
+CPU에서 artifact 생성과 replay를 완료한 뒤 container, volume과 임시 artifact를 정리한다.
+
+먼저 [Docker Engine](https://docs.docker.com/engine/install/)을 설치하고 현재 사용자가 daemon에
+접근할 수 있는지 확인한다.
 
 ```bash
-python vector_workload/export_vectors.py export \
-  --corpus-file vector_workload/examples/corpus.jsonl \
-  --query-file vector_workload/examples/queries.jsonl \
-  --output-dir vector_workload/output/smoke-mixed \
-  --smoke \
-  --revision 1110a243fdf4706b3f48f1d95db1a4f5529b4d41 \
-  --device cuda:0 \
-  --batch-size 8 \
-  --dtype float32 \
-  --chunk-size 256 \
-  --chunk-overlap 32 \
-  --initial-corpus-ratio 0.5 \
-  --searches-per-insert 1 \
-  --insert-event-size 1
-
-python vector_workload/export_vectors.py verify \
-  --artifact-dir vector_workload/output/smoke-mixed
+docker version
 ```
 
-실행 중인 Milvus 서버에 검증한 artifact를 replay한다.
+일반적인 Linux 설치에서는 Docker 설치와 daemon 설정에 `root` 또는 `sudo` 권한이 필요하다.
+Smoke runner 자체는 `docker` command를 직접 실행하므로 현재 사용자에게 Docker socket 접근
+권한이 있어야 한다. `docker` group은 root 수준의 권한을 부여하므로
+[Docker post-install guide](https://docs.docker.com/engine/install/linux-postinstall/)의 보안 경고를
+확인한다.
 
 ```bash
-python vector_workload/replay_milvus.py \
-  --artifact-dir vector_workload/output/smoke-mixed \
-  --uri http://localhost:19530 \
-  --collection ragperf_smoke_mixed_001 \
-  --result-file vector_workload/output/smoke-mixed/replay-result.json \
-  --index-type DISKANN \
-  --metric COSINE \
-  --warmup-queries 0 \
-  --concurrency 1
+bash vector_workload/run_docker_smoke.sh
 ```
 
-Preparation tool은 비어 있지 않은 output directory를 덮어쓰지 않으며, replayer는 기존 result
-file이나 Milvus collection을 덮어쓰지 않는다. 실행마다 새 경로와 collection 이름을 사용한다.
+Milvus container를 직접 유지하거나 data volume을 보존하려면
+[Milvus Docker Setup](docs/DOCKER_MILVUS.md)을 참고한다. 기존 deployment에 artifact를 준비하고
+replay하는 절차는 [Workflow Guide](docs/WORKFLOWS.md)에 있다.
 
 ## Documentation
 
 - [Workflow Guide](docs/WORKFLOWS.md): dataset preparation, embedding export, synthetic generation,
   Milvus configuration, and replay commands
+- [Milvus Docker Setup](docs/DOCKER_MILVUS.md): validated Docker image, automatic smoke test,
+  persistent Compose deployment, workload replay, and cleanup
 - [Audio ASR Workflow](docs/AUDIO_ASR.md): audio transcription, text embedding, and mixed replay
 - [Artifact Format](docs/ARTIFACT_FORMAT.md): JSONL input, Parquet shards, manifest, schedule,
   checksums, and vector layout rules

@@ -189,6 +189,9 @@ DISKANN index build, load, warm-up, measurement 순서로 실행한다. 결과 J
 Milvus는 embedded database가 아니다. Standalone 또는 Cluster의 QueryNode와 IndexNode data
 path를 대상 mount에 연결하고, QueryNode에서 disk index를 활성화한다.
 
+검증된 Milvus `2.6.18` Standalone container를 local volume으로 실행하는 방법은
+[Milvus Docker Setup](DOCKER_MILVUS.md)을 참고한다.
+
 ```yaml
 queryNode:
   enableDisk: true
