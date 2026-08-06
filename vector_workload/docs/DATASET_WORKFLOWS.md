@@ -2,6 +2,7 @@
 
 이 문서는 dataset별 input preparation recipe만 다룬다. 공통 artifact 기록 규칙과
 `initial-corpus-ratio`, search/insert schedule의 의미는 [Record Guide](RECORD.md)가 기준이다.
+Count 기반 record/replay와 용량 추정은 [Workload Scripts](../scripts/README.md)를 사용할 수 있다.
 Milvus 실행과 result 해석은 [Replay Guide](REPLAY.md), Docker Milvus 기동은
 [Milvus Docker Setup](DOCKER_MILVUS.md)을 참고한다.
 

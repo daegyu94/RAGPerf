@@ -77,6 +77,7 @@ data volume을 보존하려면 [Milvus Docker Setup](docs/DOCKER_MILVUS.md)을 �
 - [Record Guide](docs/RECORD.md): corpus/query embedding, schedule recording, and artifact validation
 - [Replay Guide](docs/REPLAY.md): Milvus loading, DISKANN replay, options, and result output
 - [Dataset Workflows](docs/DATASET_WORKFLOWS.md): dataset-specific input preparation and connection examples
+- [Workload Scripts](scripts/README.md): count-based record/replay entrypoints with size estimates
 - [Milvus Docker Setup](docs/DOCKER_MILVUS.md): validated Docker image, automatic smoke test,
   persistent Compose deployment, and cleanup
 - [Artifact Format](docs/ARTIFACT_FORMAT.md): JSONL input, Parquet shards, manifest, schedule,

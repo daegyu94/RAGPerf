@@ -13,6 +13,8 @@ Parquet shards + manifest + checksums
 
 Artifact 구조와 입력 schema의 기준은 [Artifact Format](ARTIFACT_FORMAT.md)에 있다. Wikipedia,
 arXiv, Audio ASR 같은 dataset별 input 준비 방법은 [Dataset Workflows](DATASET_WORKFLOWS.md)를 참고한다.
+Record count로 실행하고 예상 input/vector/artifact 크기를 함께 확인하려면
+[Workload Scripts](../scripts/README.md)를 사용한다.
 
 ## Environment
 
