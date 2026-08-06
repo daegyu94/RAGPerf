@@ -76,6 +76,42 @@ def iter_queries(paths: list[Path], max_queries: int | None) -> Iterator[dict[st
                 return
 
 
+def iter_multivector_queries(
+    paths: list[Path], max_queries: int | None
+) -> Iterator[dict[str, Any]]:
+    current_id: str | None = None
+    vectors: list[np.ndarray] = []
+    delay_ms = 0.0
+    expected_id: str | None = None
+    emitted = 0
+    for path in paths:
+        for row in iter_rows(path, ["metadata_json", "vector", "delay_ms"]):
+            metadata = json.loads(row["metadata_json"] or "{}")
+            query_id = str(metadata["query_id"])
+            if current_id is not None and query_id != current_id:
+                yield {
+                    "id": current_id,
+                    "vector": np.asarray(vectors, dtype=np.float32),
+                    "delay_ms": delay_ms,
+                    "expected_id": expected_id,
+                }
+                emitted += 1
+                if max_queries is not None and emitted >= max_queries:
+                    return
+                vectors = []
+            current_id = query_id
+            vectors.append(np.asarray(row["vector"], dtype=np.float32))
+            delay_ms = float(row["delay_ms"])
+            expected_id = metadata.get("expected_doc_id") or metadata.get("expected_id")
+    if current_id is not None and (max_queries is None or emitted < max_queries):
+        yield {
+            "id": current_id,
+            "vector": np.asarray(vectors, dtype=np.float32),
+            "delay_ms": delay_ms,
+            "expected_id": expected_id,
+        }
+
+
 def iter_schedule(paths: list[Path]) -> Iterator[dict[str, Any]]:
     for path in paths:
         yield from iter_rows(path, ["sequence", "operation", "count"])
@@ -86,7 +122,7 @@ def iter_corpus(paths: list[Path]) -> Iterator[dict[str, Any]]:
         yield from iter_rows(path, ["id", "text", "metadata_json", "vector"])
 
 
-def create_schema(dimension: int, max_payload_length: int) -> Any:
+def create_schema(dimension: int, max_payload_length: int, vector_layout: str) -> Any:
     schema = MilvusClient.create_schema(auto_id=False, enable_dynamic_field=False)
     schema.add_field(
         field_name="id",
@@ -109,6 +145,13 @@ def create_schema(dimension: int, max_payload_length: int) -> Any:
         datatype=DataType.FLOAT_VECTOR,
         dim=dimension,
     )
+    if vector_layout == "multi_vector":
+        schema.add_field(
+            field_name="group_id",
+            datatype=DataType.VARCHAR,
+            max_length=max_payload_length,
+        )
+        schema.add_field(field_name="sequence_id", datatype=DataType.INT64)
     return schema
 
 
@@ -118,6 +161,7 @@ def insert_shard(
     path: Path,
     insert_batch_size: int,
     max_payload_length: int,
+    vector_layout: str,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     rows = 0
@@ -125,19 +169,13 @@ def insert_shard(
         data = batch.to_pydict()
         records: list[dict[str, Any]] = []
         for row in range(batch.num_rows):
-            values = {
-                "id": str(data["id"][row]),
-                "text": str(data["text"][row]),
-                "metadata_json": str(data["metadata_json"][row] or "{}"),
-                # Milvus FLOAT_VECTOR is float32. This also normalizes float16 artifacts.
-                "vector": np.asarray(data["vector"][row], dtype=np.float32).tolist(),
-            }
-            for field in ("id", "text", "metadata_json"):
-                if len(values[field].encode("utf-8")) > max_payload_length:
-                    raise ValueError(
-                        f"{path.name}:{field} exceeds Milvus max_length={max_payload_length}"
-                    )
-            records.append(values)
+            records.append(
+                milvus_record(
+                    {column: data[column][row] for column in data},
+                    max_payload_length,
+                    vector_layout,
+                )
+            )
         client.insert(collection_name=collection, data=records)
         rows += len(records)
     seconds = time.perf_counter() - started
@@ -149,7 +187,9 @@ def insert_shard(
     }
 
 
-def milvus_record(row: dict[str, Any], max_payload_length: int) -> dict[str, Any]:
+def milvus_record(
+    row: dict[str, Any], max_payload_length: int, vector_layout: str
+) -> dict[str, Any]:
     record = {
         "id": str(row["id"]),
         "text": str(row["text"]),
@@ -159,6 +199,15 @@ def milvus_record(row: dict[str, Any], max_payload_length: int) -> dict[str, Any
     for field in ("id", "text", "metadata_json"):
         if len(record[field].encode("utf-8")) > max_payload_length:
             raise ValueError(f"{record['id']}:{field} exceeds max_length={max_payload_length}")
+    if vector_layout == "multi_vector":
+        metadata = json.loads(record["metadata_json"])
+        group_id = metadata.get("document_id")
+        if group_id is None:
+            raise ValueError(f"{record['id']}: multi-vector corpus row lacks document_id")
+        record["group_id"] = str(group_id)
+        record["sequence_id"] = int(metadata["sequence_id"])
+        if len(record["group_id"].encode("utf-8")) > max_payload_length:
+            raise ValueError(f"{record['id']}:group_id exceeds max_length={max_payload_length}")
     return record
 
 
@@ -168,14 +217,17 @@ def insert_event(
     rows: Iterator[dict[str, Any]],
     count: int,
     max_payload_length: int,
+    vector_layout: str,
 ) -> dict[str, Any]:
     records: list[dict[str, Any]] = []
     for _ in range(count):
         try:
             row = next(rows)
         except StopIteration as exc:
-            raise ValueError("schedule requests more insert rows than the artifact contains") from exc
-        records.append(milvus_record(row, max_payload_length))
+            raise ValueError(
+                "schedule requests more insert rows than the artifact contains"
+            ) from exc
+        records.append(milvus_record(row, max_payload_length, vector_layout))
     started = time.perf_counter()
     client.insert(collection_name=collection, data=records)
     seconds = time.perf_counter() - started
@@ -201,6 +253,8 @@ def run_search(
     query: dict[str, Any],
     args: argparse.Namespace,
 ) -> dict[str, Any]:
+    if query["vector"].ndim == 2:
+        return run_multivector_search(client, collection, query, args)
     started = time.perf_counter()
     search_params = {
         "metric_type": args.metric,
@@ -213,6 +267,7 @@ def run_search(
         limit=args.top_k,
         output_fields=["id"],
         search_params=search_params,
+        consistency_level=args.consistency_level,
     )
     rows = response[0] if response else []
     latency_ms = (time.perf_counter() - started) * 1000
@@ -227,6 +282,59 @@ def run_search(
     }
 
 
+def result_group_id(result: dict[str, Any]) -> str | None:
+    value = result.get("group_id")
+    if value is not None:
+        return str(value)
+    entity = result.get("entity") or {}
+    value = entity.get("group_id")
+    return None if value is None else str(value)
+
+
+def run_multivector_search(
+    client: MilvusClient,
+    collection: str,
+    query: dict[str, Any],
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    started = time.perf_counter()
+    response = client.search(
+        collection_name=collection,
+        data=query["vector"].tolist(),
+        anns_field="vector",
+        limit=args.token_top_k,
+        output_fields=["group_id"],
+        search_params={
+            "metric_type": args.metric,
+            "params": {"search_list": args.search_list},
+        },
+        consistency_level=args.consistency_level,
+    )
+    document_scores: dict[str, float] = {}
+    for token_results in response or []:
+        token_scores: dict[str, float] = {}
+        for result in token_results:
+            group_id = result_group_id(result)
+            if group_id is None:
+                continue
+            score = float(result.get("distance", 0.0))
+            if args.metric == "L2":
+                score = -score
+            token_scores[group_id] = max(token_scores.get(group_id, -float("inf")), score)
+        for group_id, score in token_scores.items():
+            document_scores[group_id] = document_scores.get(group_id, 0.0) + score
+    ranked = sorted(document_scores, key=document_scores.get, reverse=True)[: args.top_k]
+    latency_ms = (time.perf_counter() - started) * 1000
+    expected_id = query["expected_id"]
+    return {
+        "id": query["id"],
+        "latency_ms": latency_ms,
+        "top1_correct": expected_id is not None and bool(ranked) and ranked[0] == expected_id,
+        "expected_neighbor_available": expected_id is not None,
+        "result_count": len(ranked),
+    }
+
+
 def replay(args: argparse.Namespace) -> None:
     artifact_dir = args.artifact_dir.resolve()
     verify_artifact(artifact_dir)
@@ -234,6 +342,7 @@ def replay(args: argparse.Namespace) -> None:
         manifest = yaml.safe_load(stream)
 
     dimension = int(manifest["embedding"]["dimension"])
+    vector_layout = manifest["embedding"].get("vector_layout", "single_vector")
     if args.max_payload_length <= 0 or args.max_payload_length > 65535:
         raise ValueError("max-payload-length must be between 1 and 65535")
     if args.collection == "default":
@@ -253,8 +362,12 @@ def replay(args: argparse.Namespace) -> None:
         raise FileExistsError(
             f"Milvus collection already exists; choose a new collection: {args.collection}"
         )
-    schema = create_schema(dimension, args.max_payload_length)
-    client.create_collection(collection_name=args.collection, schema=schema)
+    schema = create_schema(dimension, args.max_payload_length, vector_layout)
+    client.create_collection(
+        collection_name=args.collection,
+        schema=schema,
+        consistency_level=args.consistency_level,
+    )
 
     corpus_paths = artifact_shards(manifest, artifact_dir, "corpus")
     scheduled_insert_paths = artifact_shards(
@@ -270,6 +383,7 @@ def replay(args: argparse.Namespace) -> None:
             path,
             args.insert_batch_size,
             args.max_payload_length,
+            vector_layout,
         )
         for path in corpus_paths
     ]
@@ -289,7 +403,10 @@ def replay(args: argparse.Namespace) -> None:
     index_seconds = time.perf_counter() - index_started
     client.load_collection(collection_name=args.collection)
 
-    queries = list(iter_queries(query_paths, args.max_queries))
+    if vector_layout == "multi_vector":
+        queries = list(iter_multivector_queries(query_paths, args.max_queries))
+    else:
+        queries = list(iter_queries(query_paths, args.max_queries))
     if not queries:
         raise ValueError("no queries selected for replay")
     warmup_count = min(args.warmup_queries, len(queries))
@@ -346,6 +463,7 @@ def replay(args: argparse.Namespace) -> None:
                         scheduled_rows,
                         count,
                         args.max_payload_length,
+                        vector_layout,
                     )
                 )
             else:
@@ -376,6 +494,8 @@ def replay(args: argparse.Namespace) -> None:
             "rows": inserted_rows + sum(item["rows"] for item in mixed_insert_results),
             "index_type": args.index_type,
             "metric": args.metric,
+            "vector_layout": vector_layout,
+            "consistency_level": args.consistency_level,
             "storage_path_note": args.storage_path_note,
         },
         "initial_load": {
@@ -396,6 +516,7 @@ def replay(args: argparse.Namespace) -> None:
             "schedule_events": len(schedule),
             "concurrency": args.concurrency,
             "top_k": args.top_k,
+            "token_top_k": args.token_top_k if vector_layout == "multi_vector" else None,
             "metric": args.metric,
             "respect_delay": args.respect_delay,
             "warmup_queries": warmup_count,
@@ -435,10 +556,22 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--metric", choices=("COSINE", "L2", "IP"), default="COSINE")
     parser.add_argument("--search-list", type=int, default=100)
     parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument(
+        "--token-top-k",
+        type=int,
+        default=100,
+        help="Milvus candidates per query token for multi-vector MaxSim",
+    )
     parser.add_argument("--concurrency", type=int, default=8)
     parser.add_argument("--warmup-queries", type=int, default=100)
     parser.add_argument("--max-queries", type=int)
     parser.add_argument("--respect-delay", action="store_true")
+    parser.add_argument(
+        "--consistency-level",
+        choices=("Strong", "Bounded", "Eventually", "Session"),
+        default="Strong",
+        help="Milvus consistency used to make scheduled inserts visible to later searches",
+    )
     parser.add_argument("--max-payload-length", type=int, default=65535)
     return parser
 
@@ -446,7 +579,12 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     try:
         args = build_parser().parse_args()
-        if args.insert_batch_size <= 0 or args.concurrency <= 0 or args.top_k <= 0:
+        if (
+            args.insert_batch_size <= 0
+            or args.concurrency <= 0
+            or args.top_k <= 0
+            or args.token_top_k <= 0
+        ):
             raise ValueError("batch size, concurrency and top-k must be positive")
         if args.warmup_queries < 0 or args.search_list <= 0:
             raise ValueError("warmup-queries must be non-negative and search-list must be positive")

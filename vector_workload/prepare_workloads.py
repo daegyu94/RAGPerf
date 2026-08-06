@@ -190,6 +190,75 @@ def prepare_arxiv_pdf_text(
     return result
 
 
+def render_pdf_page_rows(
+    pdf_paths: Iterable[Path],
+    pages_dir: Path,
+    converter: Callable[[Path], Iterable[Any]] | None = None,
+) -> Iterable[dict[str, Any]]:
+    if converter is None:
+        import pypdfium2 as pdfium
+
+        def converter(path: Path) -> Iterable[Any]:
+            document = pdfium.PdfDocument(path)
+            try:
+                for page in document:
+                    yield page.render(scale=2).to_pil()
+            finally:
+                document.close()
+    pages_dir.mkdir(parents=True, exist_ok=True)
+    for pdf_path in pdf_paths:
+        for page_index, image in enumerate(converter(pdf_path), start=1):
+            page_id = f"{pdf_path.stem}-page-{page_index:05d}"
+            image_path = pages_dir / f"{page_id}.png"
+            try:
+                image.save(image_path, "PNG")
+            finally:
+                close = getattr(image, "close", None)
+                if close is not None:
+                    close()
+            yield {
+                "id": page_id,
+                "image_path": str(image_path.resolve()),
+                "metadata": {
+                    "dataset": "common-pile/arxiv_papers",
+                    "source_file": pdf_path.name,
+                    "page": page_index,
+                    "modality": "image",
+                },
+            }
+
+
+def prepare_arxiv_pdf_image(
+    args: argparse.Namespace,
+    converter: Callable[[Path], Iterable[Any]] | None = None,
+) -> dict[str, Any]:
+    if args.max_pdfs is not None and args.max_pdfs <= 0:
+        raise ValueError("max-pdfs must be positive")
+    pdf_paths = sorted(args.pdf_dir.rglob("*.pdf"))
+    if args.max_pdfs is not None:
+        pdf_paths = pdf_paths[: args.max_pdfs]
+    if not pdf_paths:
+        raise ValueError(f"no PDF files found under {args.pdf_dir}")
+    query_count = validate_query_file(args.query_file)
+
+    output_dir = args.output_dir.resolve()
+    ensure_empty_output_dir(output_dir)
+    page_count = write_jsonl(
+        output_dir / "corpus.jsonl",
+        render_pdf_page_rows(pdf_paths, output_dir / "pages", converter),
+    )
+    shutil.copyfile(args.query_file, output_dir / "queries.jsonl")
+    result = {
+        "workload": "arxiv-pdf-image",
+        "output_dir": str(output_dir),
+        "pdf_documents": len(pdf_paths),
+        "page_images": page_count,
+        "queries": query_count,
+    }
+    print(json.dumps(result, indent=2))
+    return result
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -208,6 +277,14 @@ def build_parser() -> argparse.ArgumentParser:
     arxiv_text_parser.add_argument("--output-dir", type=Path, required=True)
     arxiv_text_parser.add_argument("--max-pdfs", type=int)
     arxiv_text_parser.set_defaults(func=prepare_arxiv_pdf_text)
+    arxiv_image_parser = subparsers.add_parser(
+        "arxiv-pdf-image", help="render local arXiv PDF files for ColPali"
+    )
+    arxiv_image_parser.add_argument("--pdf-dir", type=Path, required=True)
+    arxiv_image_parser.add_argument("--query-file", type=Path, required=True)
+    arxiv_image_parser.add_argument("--output-dir", type=Path, required=True)
+    arxiv_image_parser.add_argument("--max-pdfs", type=int)
+    arxiv_image_parser.set_defaults(func=prepare_arxiv_pdf_image)
     return parser
 
 

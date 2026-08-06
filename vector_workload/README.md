@@ -1,7 +1,7 @@
 # Portable vector workload record/replay
 
-이 디렉터리는 GPU가 있는 H100 server에서 corpus/query embedding을 생성하거나 CPU에서
-synthetic vector를 record하고, GPU가 없는 PoC/B300 cluster의 Milvus DISKANN에서 replay하는
+이 디렉터리는 GPU server에서 corpus/query embedding을 생성하거나 CPU에서 synthetic
+vector를 record하고, GPU가 없는 target server의 Milvus DISKANN에서 replay하는
 독립 workflow를 제공한다. RAGPerf의 vLLM, pipeline과 monitoring system을 import하지 않는다.
 
 전체 설계와 현재 RAGPerf의 지원 범위는 [DESIGN.md](DESIGN.md)를 참고한다.
@@ -13,6 +13,7 @@ vector_workload/
 ├── README.md
 ├── DESIGN.md
 ├── artifact_utils.py
+├── export_colpali.py
 ├── export_vectors.py
 ├── prepare_workloads.py
 ├── record_synthetic.py
@@ -47,6 +48,7 @@ window로 나뉜다. 이미 chunking된 입력은 `--chunk-size 0`으로 그대�
 ## 환경 준비
 
 Project root에서 project-local virtual environment를 준비하고 필요한 package만 설치한다.
+아래 명령의 `/MNTPNT`는 artifact와 Milvus data를 저장할 mount 경로로 바꾼다.
 
 ```bash
 uv venv .venv
@@ -73,7 +75,7 @@ source .venv/bin/activate
 python vector_workload/export_vectors.py export \
   --corpus-file vector_workload/examples/corpus.jsonl \
   --query-file vector_workload/examples/queries.jsonl \
-  --output-dir vector_workload/output/smoke-h100-pinned \
+  --output-dir vector_workload/output/smoke-mixed \
   --smoke \
   --revision 1110a243fdf4706b3f48f1d95db1a4f5529b4d41 \
   --device cuda:0 \
@@ -90,13 +92,13 @@ python vector_workload/export_vectors.py export \
 
 ```bash
 python vector_workload/export_vectors.py verify \
-  --artifact-dir vector_workload/output/smoke-h100-pinned
+  --artifact-dir vector_workload/output/smoke-mixed
 
 python vector_workload/replay_milvus.py \
-  --artifact-dir vector_workload/output/smoke-h100-pinned \
+  --artifact-dir vector_workload/output/smoke-mixed \
   --uri http://localhost:19530 \
   --collection ragperf_smoke_mixed_001 \
-  --result-file vector_workload/output/smoke-h100-pinned/replay-result.json \
+  --result-file vector_workload/output/smoke-mixed/replay-result.json \
   --index-type DISKANN \
   --metric COSINE \
   --warmup-queries 0 \
@@ -114,14 +116,14 @@ mixed exporter/replayer를 사용한다.
 
 ```bash
 python vector_workload/prepare_workloads.py wikipedia-nq \
-  --output-dir /mnt/{mountpoint}/ragperf/wikipedia-nq/input \
+  --output-dir /MNTPNT/ragperf/wikipedia-nq/input \
   --corpus-count 100000 \
   --query-count 2000
 
 python vector_workload/export_vectors.py export \
-  --corpus-file /mnt/{mountpoint}/ragperf/wikipedia-nq/input/corpus.jsonl \
-  --query-file /mnt/{mountpoint}/ragperf/wikipedia-nq/input/queries.jsonl \
-  --output-dir /mnt/{mountpoint}/ragperf/wikipedia-nq/artifact \
+  --corpus-file /MNTPNT/ragperf/wikipedia-nq/input/corpus.jsonl \
+  --query-file /MNTPNT/ragperf/wikipedia-nq/input/queries.jsonl \
+  --output-dir /MNTPNT/ragperf/wikipedia-nq/artifact \
   --device cuda:0 \
   --initial-corpus-ratio 0.8 \
   --searches-per-insert 10 \
@@ -135,15 +137,15 @@ PDF page text를 추출하고 exporter가 deterministic chunking과 embedding을
 
 ```bash
 python vector_workload/prepare_workloads.py arxiv-pdf-text \
-  --pdf-dir /mnt/{mountpoint}/ragperf/arxiv/pdfs \
-  --query-file /mnt/{mountpoint}/ragperf/arxiv/queries.jsonl \
-  --output-dir /mnt/{mountpoint}/ragperf/arxiv-text/input \
+  --pdf-dir /MNTPNT/ragperf/arxiv/pdfs \
+  --query-file /MNTPNT/ragperf/arxiv/queries.jsonl \
+  --output-dir /MNTPNT/ragperf/arxiv-text/input \
   --max-pdfs 10000
 
 python vector_workload/export_vectors.py export \
-  --corpus-file /mnt/{mountpoint}/ragperf/arxiv-text/input/corpus.jsonl \
-  --query-file /mnt/{mountpoint}/ragperf/arxiv-text/input/queries.jsonl \
-  --output-dir /mnt/{mountpoint}/ragperf/arxiv-text/artifact \
+  --corpus-file /MNTPNT/ragperf/arxiv-text/input/corpus.jsonl \
+  --query-file /MNTPNT/ragperf/arxiv-text/input/queries.jsonl \
+  --output-dir /MNTPNT/ragperf/arxiv-text/artifact \
   --device cuda:0 \
   --chunk-size 512 \
   --chunk-overlap 0 \
@@ -155,6 +157,46 @@ python vector_workload/export_vectors.py export \
 생성된 artifact는 위 smoke 예시와 같은 `replay_milvus.py` 명령으로 GPU 없는 Milvus
 server에서 initial insert, DISKANN index build와 mixed search/insert를 실행한다.
 
+## arXiv PDF image + ColPali
+
+PDF를 page image로 만들고 GPU server에서 ColPali document/query multi-vector를 모두
+생성한다. Artifact에는 image 자체가 아니라 `document_id`, `sequence_id`와 vector가
+저장된다. Replayer는 query token별 Milvus search 결과를 document 단위 MaxSim으로 합산한다.
+
+```bash
+python vector_workload/prepare_workloads.py arxiv-pdf-image \
+  --pdf-dir /MNTPNT/ragperf/arxiv/pdfs \
+  --query-file /MNTPNT/ragperf/arxiv/queries.jsonl \
+  --output-dir /MNTPNT/ragperf/arxiv-image/input \
+  --max-pdfs 10000
+
+python vector_workload/export_colpali.py \
+  --corpus-file /MNTPNT/ragperf/arxiv-image/input/corpus.jsonl \
+  --query-file /MNTPNT/ragperf/arxiv-image/input/queries.jsonl \
+  --output-dir /MNTPNT/ragperf/arxiv-image/artifact \
+  --model vidore/colpali-v1.2 \
+  --device cuda:0 \
+  --batch-size 1 \
+  --initial-corpus-ratio 0.8 \
+  --searches-per-insert 10 \
+  --insert-event-size 10
+
+python vector_workload/replay_milvus.py \
+  --artifact-dir /MNTPNT/ragperf/arxiv-image/artifact \
+  --uri http://localhost:19530 \
+  --collection ragperf_arxiv_colpali_001 \
+  --result-file /MNTPNT/ragperf/arxiv-image/replay-result.json \
+  --index-type DISKANN \
+  --metric IP \
+  --top-k 10 \
+  --token-top-k 100 \
+  --concurrency 1
+```
+
+`--insert-event-size`는 ColPali workload에서 event당 document 수이다. 한 document의 token
+vector는 같은 insert event에 함께 들어간다. Target server에서는 ColPali, PyTorch 또는
+GPU가 필요하지 않고 `pyarrow`, `PyYAML`, `numpy`, `pymilvus`만 사용한다.
+
 ## Production-like embedding workload
 
 실제 corpus/query에서 text embedding을 생성할 때는 `--smoke` 없이 실행한다. 아래
@@ -164,9 +206,9 @@ server에서 initial insert, DISKANN index build와 mixed search/insert를 실�
 source .venv/bin/activate
 
 python vector_workload/export_vectors.py export \
-  --corpus-file /path/to/corpus.jsonl \
-  --query-file /path/to/queries.jsonl \
-  --output-dir /mnt/{mountpoint}/ragperf/vector-workload-bge-m3/artifact \
+  --corpus-file /MNTPNT/ragperf/custom/input/corpus.jsonl \
+  --query-file /MNTPNT/ragperf/custom/input/queries.jsonl \
+  --output-dir /MNTPNT/ragperf/vector-workload-bge-m3/artifact \
   --device cuda:0 \
   --batch-size 32 \
   --dtype float32
@@ -185,12 +227,12 @@ record한다. 각 query는 corpus vector 하나에 작은 noise를 더해 만들
 이 workload는 VectorDB I/O 검증용이며 embedding 품질 평가용이 아니다.
 
 다음 예시는 384-dimension float32 corpus vector 100,000개(순수 vector data 약 146 MiB)와
-query 2,000개를 `/mnt/{mountpoint}`에 기록하고, 같은 경로를 data path로 마운트한 Milvus
+query 2,000개를 `/MNTPNT`에 기록하고, 같은 경로를 data path로 마운트한 Milvus
 DISKANN에서 replay한다. `RUN_DIR`과 collection 이름은 새 값이어야 한다. Recorder와
 replayer는 기존 artifact, collection 또는 result를 덮어쓰지 않는다.
 
 Milvus는 embedded DB가 아니므로 먼저 Standalone/Cluster의 QueryNode와 IndexNode data path를
-`/mnt/{mountpoint}/ragperf/milvus-data`에 마운트하고 `queryNode.enableDisk: true`로 설정한다.
+`/MNTPNT/ragperf/milvus-data`에 마운트하고 `queryNode.enableDisk: true`로 설정한다.
 
 최소 DISKANN 설정은 다음과 같다.
 
@@ -205,7 +247,7 @@ common:
 ```bash
 source .venv/bin/activate
 
-RUN_DIR=/mnt/{mountpoint}/ragperf/vector-workload-100k-001
+RUN_DIR=/MNTPNT/ragperf/vector-workload-100k-001
 
 python vector_workload/record_synthetic.py \
   --output-dir "$RUN_DIR/artifact" \
@@ -226,7 +268,7 @@ python vector_workload/replay_milvus.py \
   --token root:Milvus \
   --collection "ragperf_diskann_100k_001" \
   --result-file "$RUN_DIR/milvus/replay-result.json" \
-  --storage-path-note /mnt/{mountpoint}/ragperf/milvus-data \
+  --storage-path-note /MNTPNT/ragperf/milvus-data \
   --insert-batch-size 10000 \
   --index-type DISKANN \
   --metric COSINE \
@@ -253,15 +295,19 @@ latency p50/p90/p95/p99와 top-1 recall을 포함한다. 기본값은 `delay_ms`
 ## 출력
 
 ```text
-output/smoke-h100-pinned/
+output/smoke-mixed/
 ├── corpus-00000.parquet
+├── inserts-00000.parquet
 ├── queries-00000.parquet
+├── schedule-00000.parquet
 ├── workload-manifest.yaml
 └── SHA256SUMS
 ```
 
 - Corpus shard: chunk ID, text, metadata와 embedding 또는 synthetic vector
 - Query shard: query ID, text, metadata, vector와 `delay_ms`
+- Insert shard: index build 후 schedule에 따라 추가할 pre-embedded corpus vector
+- Schedule shard: 순서가 고정된 `search`/`insert` event와 event별 row count
 - Manifest: 입력/generator, mode, model/revision, vector dimension/dtype, GPU와 처리량
 - `SHA256SUMS`: 다운로드 후 전체 artifact 무결성 검증용 checksum
 
@@ -269,73 +315,6 @@ output/smoke-h100-pinned/
 146 MiB이다. `record_synthetic.py`의 I/O 검증 workload는 이처럼 model-independent한
 384차원을 사용한다. `export_vectors.py`로 실제 text embedding을 생성하는
 production workload에서는 `BAAI/bge-m3`의 dimension과 artifact를 별도로 관리한다.
-
-## 검증된 smoke test
-
-2026-08-05에 위 example input과 고정된 model revision으로 H100 smoke test를 실행했다.
-사용한 snapshot은 `1110a243fdf4706b3f48f1d95db1a4f5529b4d41`이다.
-
-| 항목 | 결과 |
-| --- | ---: |
-| GPU | NVIDIA H100 80GB HBM3 |
-| Corpus document/vector | 8 / 8 |
-| Query vector | 4 |
-| Vector dimension | 384 |
-| Vector dtype | float32 |
-| Normalization | L2 normalized |
-| Parquet shard | 2 |
-| 전체 smoke artifact | 23,700 bytes |
-
-별도 verify 실행과 함께 vector shape `(8, 384)`, `(4, 384)`, L2 norm 약 1.0을 확인했다.
-각 query의 cosine similarity가 가장 높은 corpus도 의도한 smoke-test document와 일치했다.
-
-## 재생성된 100k vector artifact
-
-2026-08-05에 위 설정으로 `/mnt/{mountpoint}/ragperf/vector-workload-milvus-20260805`에서
-vector record와 checksum verify를 다시 실행했다. 이는 실제 replay에 재사용할 수 있는
-artifact 검증 결과이며, Milvus replay는 endpoint가 실행 중인 target에서 별도로 수행해야
-한다.
-
-| 항목 | 결과 |
-| --- | ---: |
-| Corpus / query vector | 100,000 / 2,000 |
-| Dimension / dtype | 384 / float32 |
-| Artifact size | 145,223,078 bytes |
-| Record time | 2.35 s |
-| Milvus DISKANN result | 아래 실제 replay 결과 참고 |
-
-## 실제 Milvus DISKANN replay
-
-2026-08-05에 위 artifact를 공식 Milvus `v2.6.18` standalone DEB binary로 실제
-생성·insert·index build·load·search했다. QueryNode 설정은 `queryNode.enableDisk: true`였고,
-Milvus local storage와 index cache는 모두 `/mnt/{mountpoint}` 아래에 두었다. 실행 결과는
-`/mnt/{mountpoint}/ragperf/vector-workload-milvus-20260805/milvus/replay-result-02.json`에
-보존되어 있다.
-
-| 항목 | 결과 |
-| --- | ---: |
-| Collection | `ragperf_diskann_100k_20260805_02` |
-| Server / client | Milvus 2.6.18 / PyMilvus 2.6.17 |
-| Corpus / query | 100,000 / 2,000 |
-| Index | DISKANN, COSINE, `search_list=100` |
-| Insert | 21.42 s (4,669 rows/s) |
-| Index build | 95.15 s |
-| Replay | 12.66 s (157.98 queries/s) |
-| Latency | p50 47.14 ms, p95 72.53 ms, p99 91.10 ms |
-| Top-1 recall | 1.0 (2,000/2,000 expected-neighbor queries) |
-
-Artifact checksum 검증과 다섯 개 Parquet shard 생성은 성공했다. 다음 실행에서는 새
-collection과 result path를 사용한다.
-
-## GitHub Release로 전달
-
-검증된 artifact directory의 Parquet shard, `workload-manifest.yaml`과 `SHA256SUMS`를 같은
-GitHub Release에 등록한다. GitHub Release는 release당 asset 1,000개, asset당 2 GiB
-미만이므로 실제 대규모 실행에서는 shard 크기와 개수를 함께 계획해야 한다.
-
-현재 exporter의 기본 shard는 smoke test와 중간 규모 검증에 맞춘 작은 크기이다. TB급
-artifact를 1,000개 이내의 release asset으로 구성하려면 각 shard를 약 1~1.9 GiB로
-키우고, 생성된 파일이 2 GiB 미만인지 upload 전에 확인해야 한다.
 
 ## 실제 workload 생성
 
@@ -362,5 +341,5 @@ Target cluster의 Milvus에서는 `replay_milvus.py`로 다음 단계를 실행�
 - TB급 본 실행에는 streaming input, incremental embedding과 bounded-memory Parquet shard
   writer를 먼저 구현해야 한다.
 - Replayer는 Milvus DISKANN search/insert mixed workload를 지원한다.
-- Milvus server 배포와 `/mnt/{mountpoint}` data path mount는 replayer가 자동으로 수행하지 않는다.
+- Milvus server 배포와 `/MNTPNT` data path mount는 replayer가 자동으로 수행하지 않는다.
 - Process, disk와 network monitoring은 별도 수집해야 한다.

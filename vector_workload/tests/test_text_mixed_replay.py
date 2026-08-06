@@ -57,8 +57,8 @@ class FakeMilvusClient:
         del collection
         return False
 
-    def create_collection(self, collection_name, schema):
-        del schema
+    def create_collection(self, collection_name, schema, **kwargs):
+        del schema, kwargs
         self.collection = collection_name
 
     def insert(self, collection_name, data):
@@ -183,6 +183,7 @@ class TextMixedReplayTest(unittest.TestCase):
                 max_queries=None,
                 respect_delay=False,
                 storage_path_note=None,
+                consistency_level="Strong",
             )
             with mock.patch.object(replay_milvus, "MilvusClient", FakeMilvusClient):
                 replay_milvus.replay(args)
