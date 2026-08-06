@@ -8,9 +8,9 @@ monitoring module을 import하지 않으므로 target 서버에 GPU가 없어도
 
 | Workflow | Preparation Tool | Replay |
 | --- | --- | --- |
-| Text embedding | `export_vectors.py` | Single-vector Milvus search/insert |
-| Audio ASR + text embedding | `prepare_workloads.py audio-asr`, then `export_vectors.py` | Single-vector Milvus search/insert |
-| ColPali PDF image | `export_colpali.py` | Multi-vector Milvus search with MaxSim |
+| Text embedding | `record_workload.py text` | Single-vector Milvus search/insert |
+| Audio ASR + text embedding | `record_workload.py audio-asr` | Single-vector Milvus search/insert |
+| ColPali PDF image | `record_workload.py colpali` | Multi-vector Milvus search with MaxSim |
 | Synthetic baseline | `generate_synthetic.py` | Optional single-vector validation with top-1 recall |
 
 현재 standalone replayer의 기준 backend는 Milvus DISKANN이다.
