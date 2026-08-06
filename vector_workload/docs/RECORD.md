@@ -1,8 +1,7 @@
 # Record a Vector Workload
 
-이 문서에서 **Record**는 application API traffic을 capture하는 기능이 아니다. Corpus와 query를
-embedding하고 실행 순서를 정의해, 다른 server에서 동일하게 replay할 수 있는 portable artifact로
-기록하는 과정이다.
+**Record**는 corpus와 query를 embedding하고 실행 순서를 정의해, 다른 server에서 동일하게
+replay할 수 있는 portable artifact로 기록하는 과정이다.
 
 ```text
 corpus.jsonl + queries.jsonl
@@ -82,7 +81,7 @@ python vector_workload/export_vectors.py verify \
 검증된 artifact directory 전체를 target server로 복사한다. 일부 Parquet shard나
 `workload-manifest.yaml`, `SHA256SUMS`만 따로 복사하면 검증에 실패한다.
 
-## Other Recorders
+## Other Artifact Producers
 
 - ColPali PDF image: `export_colpali.py`가 multi-vector artifact를 기록한다.
 - Synthetic baseline: `generate_synthetic.py`가 embedding model 없이 deterministic artifact를

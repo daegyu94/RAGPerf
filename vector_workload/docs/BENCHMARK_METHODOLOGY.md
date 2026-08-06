@@ -24,10 +24,9 @@ Artifact는 corpus/query vector, operation 순서와 선택적인 `delay_ms`를 
 이를 이용해 target deployment에서 같은 logical workload를 다시 실행하고 latency를 새로
 측정한다.
 
-현재 지원 범위는 search와 scheduled insert다. 실제 VectorDB API call trace, open-loop 또는
-closed-loop arrival model, 고정 duration, update/delete mix, timeout/error policy는 지원하지
-않는다. 따라서 결과를 production traffic scalability나 storage-oriented macrobenchmark로
-해석하지 않는다.
+현재 지원 범위는 search와 scheduled insert다. Open-loop 또는 closed-loop arrival model, 고정
+duration, update/delete mix, timeout/error policy는 지원하지 않는다. 따라서 결과를 end-to-end
+service scalability나 storage-oriented macrobenchmark로 해석하지 않는다.
 
 `--concurrency`는 client worker 수를 제한하지만 production arrival distribution을 모델링하지
 않는다. `--respect-delay`를 지정하지 않으면 artifact의 `delay_ms`를 무시하고 가능한 빠르게

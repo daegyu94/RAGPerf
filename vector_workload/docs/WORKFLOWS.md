@@ -115,8 +115,7 @@ synthetic workload를 사용한다. `generate_synthetic.py`는 corpus vector를
 따라서 peak memory는 corpus 전체가 아니라 shard와 query 수에 비례한다.
 각 query는 corpus vector에 작은 noise를 더해 만들며,
 `metadata_json.expected_id`에 예상 top-1 ID를 기록한다. 이 workload는 VectorDB I/O 검증용이며
-embedding 품질이나 production traffic의 대표성을 평가하지 않는다. 실제 application API
-traffic을 기록하는 recorder도 아니다.
+실제 dataset의 embedding 품질을 평가하지 않는다.
 
 ```bash
 RUN_DIR=/MNTPNT/ragperf/vector-workload-100k-001

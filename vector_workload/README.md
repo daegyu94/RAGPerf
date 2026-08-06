@@ -33,9 +33,8 @@ transfer to target server
 Milvus insert → index → replay → result JSON
 ```
 
-이 구조는 embedding device와 model 실행 시간을 VectorDB 결과에서 제외하고, 동일한 logical
-workload를 여러 deployment에서 재사용하기 위한 것이다. Replayer는 실제 API traffic trace가
-아니라 artifact에 정의된 logical workload를 재생한다.
+이 구조는 embedding device와 model 실행 시간을 VectorDB 결과에서 제외하고, artifact에 정의된
+동일한 logical workload를 여러 deployment에서 재사용하기 위한 것이다.
 
 ## Quick Start
 
