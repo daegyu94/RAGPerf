@@ -14,9 +14,11 @@ dataset, model, GPU는 필요하지 않습니다.
   필요합니다.
 - `--collection`은 target에 아직 존재하지 않는 이름이어야 합니다.
 - Target Milvus가 recorded vector dimension, metric과 index type을 지원해야 합니다.
-- Native replay host에는 [`requirements-replay.lock`](../docker/requirements-replay.lock)의
-  Python package가 설치되어 있어야 합니다. Docker 사용자는 [Docker 문서](DOCKER.md)를
-  참조합니다.
+- 터미널에서 `python -m milvus_trace.replay`를 직접 실행하는 경우에는
+  [`requirements-replay.lock`](../docker/requirements-replay.lock)의 Python package가
+  필요합니다. 이 방식에는 RAGPerf pipeline, dataset/model, GPU와 monitoring system이
+  필요하지 않습니다. Docker replay를 선택하면 Python package 설치도 필요 없으며
+  [Docker 문서](DOCKER.md)의 image를 사용합니다.
 
 먼저 artifact만 검증하려면 Milvus에 연결하지 않는 다음 명령을 사용합니다.
 

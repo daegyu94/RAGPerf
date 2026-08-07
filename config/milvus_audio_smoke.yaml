@@ -1,0 +1,61 @@
+run_name: milvus_audio_trace_smoke
+bench:
+  dataset: librispeech_asr
+  type: audio
+  preprocessing:
+    dataset_ratio: 1.0
+    chunk_overlap: 0
+    chunk_size: 0
+    chunktype: audio
+rag:
+  action:
+    preprocess: true
+    embedding: true
+    insert: true
+    build_index: true
+    retrieval: true
+    reranking: false
+    generation: false
+    evaluate: false
+  audio:
+    dataset_config: clean
+    split: train.100
+    streaming: false
+    sample_count: 8
+    asr_model: openai/whisper-tiny
+    embedding_model: sentence-transformers/all-MiniLM-L6-v2
+    device: ${RAG_DEVICE}
+    batch_size: 8
+  embedding:
+    device: ${RAG_DEVICE}
+    batch_size: 8
+    sentence_transformers_name: all-MiniLM-L6-v2
+  insert:
+    batch_size: 8
+  build_index:
+    index_type: IVF_FLAT
+    metric_type: L2
+  retrieval:
+    top_k: 5
+    question_num: 4
+    retrieval_batch_size: 4
+sys:
+  vector_db:
+    type: milvus
+    db_path: ${MILVUS_URI}
+    db_token: root:Milvus
+    collection_name: ragperf_audio_smoke
+    drop_previous_collection: false
+    trace:
+      enabled: true
+      output_dir: ${MNTPNT}/artifacts/audio-smoke
+      max_queue_bytes: 268435456
+      rows_per_shard: 65536
+      compression: zstd
+      on_overflow: invalidate
+  devices:
+    cpu: cpu
+    gpus: []
+    gpu_count: 0
+  log:
+    metrics_log: ./log/milvus_audio_trace_smoke.log

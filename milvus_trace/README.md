@@ -14,14 +14,15 @@ dataset + model + RAGPerf ──> source Milvus      artifact ──> target Mil
 
 Replay는 embedding, ASR, reranking, generation을 다시 실행하지 않습니다. 이 단계에서
 생긴 지연은 Milvus 요청 사이의 도착 간격으로만 재현됩니다. Replay image에도 Milvus
-server는 포함되지 않으므로 source와 target Milvus는 별도로 준비해야 합니다.
+server는 포함되지 않습니다. 처음에는 하나의 Milvus 서버를 record와 replay에 함께
+사용할 수 있고, 서로 다른 성능 환경을 비교할 때만 source와 target을 분리합니다.
 
 ## 어떤 실행 방법을 선택해야 하나요?
 
 | 목적 | 필요한 환경 | 시작 문서 |
 | --- | --- | --- |
 | 실제 RAG workload 기록 | RAGPerf 전체 의존성, dataset/model, source Milvus | [기록 가이드](docs/RECORD.md) |
-| 현재 host에서 native replay | Python, replay 의존성, target Milvus | [재생 가이드](docs/REPLAY.md) |
+| Docker 없이 Python으로 replay | Python, replay 의존성, target Milvus | [재생 가이드](docs/REPLAY.md) |
 | 격리된 CPU container에서 replay | Docker, target Milvus | [Docker 가이드](docs/DOCKER.md) |
 | Text/Image/Audio별 완전한 명령 | workload별 model과 config | [workload 예시](docs/WORKLOADS.md) |
 
@@ -48,24 +49,45 @@ Milvus server 설치는 [Vector Database Module](../src/vectordb/README.md#2-mil
 참조합니다. Record host에는 collection 생성, insert, index 생성, search/query 권한이
 필요합니다.
 
-### Native replay만 사용하는 host
+### Docker 없이 Python으로 replay하는 경우
 
-RAGPerf model 의존성 없이 replay만 실행할 때는 replay image와 같은 lock file을 설치할
-수 있습니다. Python 3.10 이상을 사용합니다.
+`python -m milvus_trace.replay`를 직접 실행하는 방식입니다. 이 경우 record에 필요한
+RAGPerf pipeline, dataset, embedding/ASR/generation model, GPU와 monitoring system은
+설치하지 않아도 됩니다. 대신 replay CLI가 사용하는 `pymilvus`, `pyarrow` 등의 Python
+package만 설치하면 됩니다. 그 package 목록을
+[`requirements-replay.lock`](docker/requirements-replay.lock)에 고정해 두었습니다.
+
+Python 3.10 이상을 사용하고, 기존 project virtual environment를 활성화하거나 replay
+전용 environment를 새로 만듭니다.
 
 ```bash
-python -m venv .venv
+# 기존 project environment를 사용할 때
 source .venv/bin/activate
+
+# 별도 environment가 필요할 때는 위 두 줄 대신 다음을 사용합니다.
+# python -m venv .venv-replay
+# source .venv-replay/bin/activate
+
 python -m pip install --upgrade pip
 python -m pip install -r milvus_trace/docker/requirements-replay.lock
 ```
 
 Docker replay를 사용할 host에는 Python 환경이 필요하지 않습니다.
 
-## 2. Recorder smoke test
+## 2. Smoke test 선택
 
-먼저 Milvus나 GPU 없이 synthetic corpus artifact를 만들어 recorder와 설치 상태를
-확인할 수 있습니다. `--artifact-dir`에는 존재하지 않거나 비어 있는 경로를 지정합니다.
+Smoke test는 두 종류입니다. 목적에 따라 필요한 준비물이 다릅니다.
+
+| 종류 | 확인하는 것 | 필요한 것 | 실제 record/replay 전에 필수인가? |
+| --- | --- | --- | --- |
+| Artifact-only 설치 확인 | Python package, recorder, Parquet/checksum 형식 | Python replay package만 | 아니요. 실제 smoke test가 실패할 때 원인을 좁히는 선택 단계입니다. |
+| End-to-end smoke test | 실제 Audio RAG의 insert/index/search와 trace/replay | Record host 전체 환경 + Milvus 1개 | 네. 실제 RAG trace 경로를 사용하려면 이 테스트를 먼저 실행합니다. |
+
+### 2.1 Artifact-only 설치 확인 (실제 smoke test 아님)
+
+Milvus나 GPU 없이 synthetic corpus artifact를 만들어 recorder 파일 형식만 확인합니다.
+이 테스트는 실제 RAG 요청이나 Milvus 연결을 검증하지 않습니다. `--artifact-dir`에는
+존재하지 않거나 비어 있는 경로를 지정합니다.
 
 ```bash
 export TRACE_ROOT="$PWD/artifacts/smoke-test"
@@ -80,9 +102,56 @@ python -m milvus_trace.stress \
 python -c "from milvus_trace.artifact import verify_artifact; m = verify_artifact('$TRACE_ROOT'); print(m['format'], m['event_count'])"
 ```
 
-마지막 명령이 `ragperf-milvus-trace 0`을 출력하면 recorder와 checksum 검증이
-동작한 것입니다. 이 smoke artifact는 bootstrap insert만 만들기 때문에 timed event가
-0개입니다. 실제 도착 패턴은 다음 단계의 RAG workload로 기록합니다.
+마지막 명령이 `ragperf-milvus-trace 0`을 출력하면 recorder와 checksum 검증만
+동작한 것입니다. 이 결과만으로 실제 RAG record가 준비되었다고 판단하지 마십시오.
+
+### 2.2 End-to-end smoke test (기본 smoke test)
+
+실제 record와 같은 `src/run_new.py`와 Audio RAG pipeline을 사용하되, dataset sample을
+8개, query를 4개로 줄입니다. 따라서 다음 단계의 full run으로 가기 전에 dataset/model
+download, monitoring, source Milvus insert/index/search, artifact 생성과 replay를 한 번에
+검증할 수 있습니다.
+
+이 테스트에는 [Record host](#record-host)에 적힌 전체 Python 의존성, monitoring
+`libmsys*.so`, Whisper와 embedding model, 그리고 실행 중인 Milvus 서버가 필요합니다.
+GPU는 필요하지 않도록 CPU 설정을 사용합니다. 단, model download와 CPU inference 때문에
+시간이 걸릴 수 있습니다.
+
+먼저 하나의 Milvus 서버가 `localhost:19530`에서 실행 중인지 확인합니다. 같은 서버를
+source와 target 역할에 함께 사용하며, replay 때는 새로운 collection 이름을 사용합니다.
+
+```bash
+export MNTPNT="$PWD/artifacts/audio-smoke-run-001"
+export MILVUS_URI=http://localhost:19530
+export RAG_DEVICE=cpu
+export GENERATION_DEVICE=cpu
+export MSYS_CONFIG=config/monitor/example_config.yaml
+export PYTHONPATH="$PWD:$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
+
+mkdir -p "$MNTPNT/artifacts" "$MNTPNT/results"
+
+python src/run_new.py \
+  --config config/milvus_audio_smoke.yaml \
+  --msys-config "$MSYS_CONFIG"
+```
+
+정상 종료 후 trace를 검증하고, 같은 Milvus 서버에 새 collection으로 replay합니다.
+
+```bash
+python -c "from milvus_trace.artifact import verify_artifact; m = verify_artifact('$MNTPNT/artifacts/audio-smoke'); print('events:', m['event_count'], 'operations:', m['operation_counts'])"
+
+python -m milvus_trace.replay \
+  --artifact-dir "$MNTPNT/artifacts/audio-smoke" \
+  --uri "$MILVUS_URI" \
+  --token root:Milvus \
+  --collection ragperf_audio_smoke_replay_001 \
+  --result-file "$MNTPNT/results/audio-smoke-replay.json"
+```
+
+이 단계가 이 프로젝트에서 말하는 실제 smoke test입니다. 성공하면 full record는 같은
+명령에서 `config/milvus_audio_smoke.yaml` 대신 원하는 workload config를 사용하고,
+dataset/query 설정만 늘려 실행합니다. 즉 smoke test는 별도의 가짜 경로가 아니라 실제
+record→replay 경로의 크기만 줄인 실행입니다.
 
 ## 3. 실제 workload 기록
 

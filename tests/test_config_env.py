@@ -43,6 +43,7 @@ class ConfigEnvironmentTest(unittest.TestCase):
             "milvus_trace_text.yaml",
             "milvus_trace_image.yaml",
             "milvus_audio.yaml",
+            "milvus_audio_smoke.yaml",
         )
         with mock.patch.dict(os.environ, environment):
             for name in configs:
