@@ -140,7 +140,6 @@ marshmallow==3.26.1
 matplotlib==3.10.7
 mdurl==0.1.2
 milvus==2.3.5
-milvus-lite==2.5.1
 minio==7.2.16
 mistral_common==1.8.4
 mmh3==5.2.0
@@ -292,6 +291,7 @@ tokenicer==0.0.4
 tokenizers==0.21.4
 tomli==2.2.1
 torch==2.6.0
+torchcodec==0.2
 torchaudio==2.6.0
 torchvision==0.21.0
 tqdm==4.67.1

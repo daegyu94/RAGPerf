@@ -19,7 +19,7 @@ class AudioDatasetLoader(BaseDatasetLoader):
 
     def __init__(
         self,
-        dataset_name="librispeech_asr",
+        dataset_name="openslr/librispeech_asr",
         dataset_config="clean",
         split="train.100",
         streaming=False,

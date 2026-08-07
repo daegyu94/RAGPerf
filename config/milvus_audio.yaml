@@ -1,6 +1,6 @@
 run_name: milvus_audio_trace
 bench:
-  dataset: librispeech_asr
+  dataset: openslr/librispeech_asr
   type: audio
   preprocessing:
     dataset_ratio: 0.001

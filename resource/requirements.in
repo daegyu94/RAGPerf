@@ -12,6 +12,7 @@ datasets
 # Audio RAG (ASR and audio decoding)
 transformers
 soundfile
+torchcodec
 
 # pytorch
 torch
