@@ -1,0 +1,63 @@
+run_name: milvus_trace_image
+bench:
+  dataset: common-pile/arxiv_papers
+  type: image
+  preprocessing:
+    chunk_overlap: 0
+    chunk_size: 512
+    chunktype: page
+    dataset_ratio: 0.0001
+rag:
+  action:
+    preprocess: true
+    embedding: true
+    insert: true
+    build_index: true
+    retrieval: true
+    reranking: false
+    generation: true
+    evaluate: false
+  embedding:
+    device: ${RAG_DEVICE}
+    sentence_transformers_name: vidore/colpali-v1.2
+    batch_size: 1
+    embedding_framework: colpali
+    model: vidore/colpali-v1.2
+    store: false
+    load: false
+  insert:
+    batch_size: 512
+    collection_name: ""
+    drop_previous_collection: false
+  build_index:
+    index_type: IVF_FLAT
+    metric_type: IP
+  retrieval:
+    question_num: 2
+    retrieval_batch_size: 1
+    top_k: 2
+  generation:
+    device: ${GENERATION_DEVICE}
+    model: Qwen/Qwen2-VL-7B-Instruct
+  pipeline:
+    batch_size: 1
+sys:
+  devices:
+    cpu: cpu
+    gpus: []
+    gpu_count: 0
+  log:
+    metrics_log: ./log/milvus_trace_image.log
+  vector_db:
+    type: milvus
+    db_path: ${MILVUS_URI}
+    db_token: root:Milvus
+    collection_name: ragperf_trace_image
+    drop_previous_collection: false
+    trace:
+      enabled: true
+      output_dir: ${MNTPNT}/artifacts/image
+      max_queue_bytes: 268435456
+      rows_per_shard: 65536
+      compression: zstd
+      on_overflow: invalidate

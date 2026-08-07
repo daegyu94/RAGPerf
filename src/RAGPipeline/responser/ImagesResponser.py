@@ -18,7 +18,7 @@ class ImageResponser(BaseResponser):
             self.model_name,
             device_map=self.device,
         )
-        self.vl_model.cuda().eval()
+        self.vl_model.to(self.device).eval()
         min_pixels = 224 * 224
         max_pixels = 1024 * 1024
         self.vl_model_processor = Qwen2VLProcessor.from_pretrained(
@@ -54,7 +54,7 @@ class ImageResponser(BaseResponser):
             padding=True,
             return_tensors="pt",
         )
-        inputs = inputs.to("cuda")
+        inputs = inputs.to(self.device)
 
         # Generate text from the vl_model
         generated_ids = self.vl_model.generate(**inputs, max_new_tokens=max_tokens)

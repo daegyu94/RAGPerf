@@ -11,7 +11,7 @@ class PDFDatasetLoader(BaseDatasetLoader):
     def __init__(
         self,
         dataset_name="common-pile/arxiv_papers",
-        output_dir="/mnt/data1/yuanxu4/local_dataset/arxiv",
+        output_dir=None,
     ):
         super().__init__(dataset_name=dataset_name)
         if self.dataset_name == "common-pile/arxiv_papers":
@@ -28,7 +28,11 @@ class PDFDatasetLoader(BaseDatasetLoader):
         else:
             raise ValueError(f"{self.dataset_name} Dataset not support.")
         self.total_length = len(ds["train"])
-        self.output_dir = output_dir
+        if output_dir:
+            self.output_dir = output_dir
+        else:
+            data_root = os.environ.get("MNTPNT", ".")
+            self.output_dir = os.path.join(data_root, "datasets", "arxiv")
 
     def download_pdf(self, load_num):
         if self.dataset_name == "common-pile/arxiv_papers":

@@ -9,6 +9,10 @@ sentence_transformers
 ragas
 datasets
 
+# Audio RAG (ASR and audio decoding)
+transformers
+soundfile
+
 # pytorch
 torch
 torchvision

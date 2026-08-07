@@ -2,10 +2,13 @@ from pymilvus import MilvusClient
 from tqdm import tqdm
 import re
 import concurrent.futures
+import atexit
+import time
 
 # sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # sys.path.reverse()
 from vectordb.DBInstance import DBInstance
+from milvus_trace import TraceConfig, TraceRecorder
 
 
 class milvus_client(DBInstance):
@@ -13,9 +16,14 @@ class milvus_client(DBInstance):
         super().__init__(**kwargs)
         self.type = "milvus"
         self.db_token = kwargs.get("db_token", "root:Milvus")
+        self.trace_config = TraceConfig.from_mapping(kwargs.get("trace"))
+        self.trace_recorder = None
 
     def setup(self):
         self.client = MilvusClient(uri=self.db_path, token=self.db_token)
+        if self.trace_config.enabled:
+            self.trace_recorder = TraceRecorder(self.trace_config)
+            atexit.register(self._close_trace_at_exit)
         print(f"***Connected to Milvus client at {self.db_path}\n")
         # return self.client
 
@@ -35,8 +43,14 @@ class milvus_client(DBInstance):
         else:
             try:
                 self.client.create_collection(
-                    collection_name, dim, consistency_level="Eventually", auto_id=True
+                    collection_name, dim, consistency_level=consistency_level, auto_id=auto_id
                 )
+                if self.trace_recorder:
+                    self.trace_recorder.describe_collection(
+                        name=collection_name, dimension=dim,
+                        consistency_level=consistency_level, auto_id=auto_id,
+                        vector_field="vector",
+                    )
                 print(
                     f"***Created new collection: {collection_name} with consistency_level: {consistency_level}"
                 )
@@ -87,7 +101,7 @@ class milvus_client(DBInstance):
                     chunks[i : i + insert_batch_size], vector[i : i + insert_batch_size]
                 )
             ]
-            self.client.insert(collection_name, data=dict_list, progress_bar=False)
+            self._insert(collection_name, dict_list, progress_bar=False)
 
         print(f"***Insert done.")
 
@@ -102,14 +116,14 @@ class milvus_client(DBInstance):
                 self.create_collection(collection_name, dim=len(dict_list[0]["vector"]))
             else:
                 print(f"***Collection: {collection_name} does not exist. Please create it first.")
-            return
+                return
 
         total_chunks_num = len(dict_list)
         print(f"***Start insert: {total_chunks_num}")
 
         for i in tqdm(range(0, total_chunks_num, insert_batch_size), desc="inserting"):
-            self.client.insert(
-                collection_name, data=dict_list[i : i + insert_batch_size], progress_bar=False
+            self._insert(
+                collection_name, dict_list[i : i + insert_batch_size], progress_bar=False
             )
 
         print(f"***Insert done.")
@@ -140,7 +154,7 @@ class milvus_client(DBInstance):
 
         def search_thread(start_idx, end_idx):
             b_vectors = query_vector[start_idx:end_idx]
-            b_results = self.client.search(
+            b_results = self._search(
                 collection_name,
                 data=b_vectors,
                 limit=topk,
@@ -157,7 +171,7 @@ class milvus_client(DBInstance):
                 start_idx = i * search_batch_size
                 end_idx = min(start_idx + search_batch_size, total_queries)
                 b_vectors = query_vector[start_idx:end_idx]
-                b_results = self.client.search(
+                b_results = self._search(
                     collection_name,
                     data=b_vectors,
                     limit=topk,
@@ -239,7 +253,7 @@ class milvus_client(DBInstance):
 
         def search_thread(start_idx, end_idx):
             b_vectors = query_vector[start_idx:end_idx]
-            b_results = self.client.search(
+            b_results = self._search(
                 collection_name,
                 data=b_vectors,
                 limit=topk,
@@ -256,7 +270,7 @@ class milvus_client(DBInstance):
                 start_idx = i * search_batch_size
                 end_idx = min(start_idx + search_batch_size, total_queries)
                 b_vectors = query_vector[start_idx:end_idx]
-                b_results = self.client.search(
+                b_results = self._search(
                     collection_name,
                     data=b_vectors,
                     limit=topk,
@@ -283,15 +297,21 @@ class milvus_client(DBInstance):
                 progress.close()
                 print(f"len results: {len(results)}")
 
-                # get unique doc_id from db search
-                doc_ids = set()
-                for r_id in range(len(results)):
-                    for r in range(len(results[r_id])):
-                        doc_ids.add(results[r_id][r]["entity"]["doc_id"])
-
+        doc_ids = set()
+        for query_results in results:
+            if query_results is None:
+                continue
+            for result in query_results:
+                doc_ids.add(result["entity"]["doc_id"])
         return doc_ids
 
     def query(self, collection_name, filter_expr, output_fields=["text", "vector"], limit=10):
+        timestamp_ns = time.monotonic_ns()
+        if self.trace_recorder:
+            self.trace_recorder.record_query(
+                collection_name, filter_expr, timestamp_ns=timestamp_ns,
+                output_fields=output_fields, limit=limit,
+            )
         results = self.client.query(
             collection_name=collection_name,
             filter_expr=filter_expr,
@@ -346,6 +366,11 @@ class milvus_client(DBInstance):
 
         # 4.3. Create an index file
         self.client.create_index(collection_name=collection_name, index_params=index_params)
+        if self.trace_recorder:
+            self.trace_recorder.mark_index_created(
+                field_name="vector", metric_type=metric_type, index_type=index_type,
+                index_name=idx_name, params={"m": 128} if index_type == "IVF_PQ" else {},
+            )
 
         # self.client.flush(collection_name=self.collection_name)
 
@@ -357,6 +382,35 @@ class milvus_client(DBInstance):
         # self.client.flush(collection_name=collection_name)
         print(index_describe)
 
+
+    def _insert(self, collection_name, data, **params):
+        timestamp_ns = time.monotonic_ns()
+        if self.trace_recorder:
+            self.trace_recorder.record_insert(
+                collection_name, data, timestamp_ns=timestamp_ns, **params
+            )
+        return self.client.insert(collection_name, data=data, **params)
+
+    def _search(self, collection_name, data, **params):
+        timestamp_ns = time.monotonic_ns()
+        if self.trace_recorder:
+            self.trace_recorder.record_search(
+                collection_name, data, timestamp_ns=timestamp_ns, **params
+            )
+        return self.client.search(collection_name, data=data, **params)
+
+    def begin_timed_workload(self):
+        if self.trace_recorder:
+            self.trace_recorder.begin_timed_workload()
+
+    def close_trace(self):
+        if self.trace_recorder:
+            recorder, self.trace_recorder = self.trace_recorder, None
+            recorder.close()
+
+    def _close_trace_at_exit(self):
+        if self.trace_recorder:
+            self.close_trace()
 
 # test
 # if __name__ == "__main__":

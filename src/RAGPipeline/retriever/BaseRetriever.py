@@ -59,7 +59,7 @@ class BaseRetriever(ABC):
             # Rerank a single document by retrieving its embeddings and calculating the similarity with the query.
             doc_colbert_vecs = client.query(
                 collection_name=collection_name,
-                filter_expr=f"doc_id in ({doc_id})",
+                filter_expr=f"doc_id in [{doc_id}]",
                 output_fields=["seq_id", "vector", "filepath"],
                 limit=1000,
             )
@@ -68,7 +68,8 @@ class BaseRetriever(ABC):
                 score = np.dot(data, doc_vecs.T).max(1).sum()
                 return (score, doc_id, doc_colbert_vecs["filepath"][0])
             elif client.type == "milvus":
-                doc_vecs = np.vstack([data["vector"] for data in doc_colbert_vecs])
+                doc_vecs = np.vstack([row["vector"] for row in doc_colbert_vecs])
+                score = np.dot(data, doc_vecs.T).max(1).sum()
                 return (score, doc_id, doc_colbert_vecs[0]["filepath"])
             else:
                 raise ValueError(f"Unsupported client type: {client.type}")

@@ -56,12 +56,9 @@ class ImagesRAGPipeline(BaseRAGPipeline):
             self.embedder.load_encoder()
             self.responser.load_llm()
             cprint.iprintf(f"*** Loading models done")
+            if hasattr(self.retriever.client, "begin_timed_workload"):
+                self.retriever.client.begin_timed_workload()
 
-            nrounds = int(math.ceil(request.req_count / batch_size))
-            cprint.iprintf(f"*** Will run {nrounds} rounds")
-            for round_idx in range(0, nrounds):
-                start_sample_idx = round_idx * batch_size
-                questions, gt_answer = request.get_questions(batch_size, start_idx=start_sample_idx)
             print(f"***Processing {request.req_count} questions")
             for i in range(0, request.req_count, batch_size):
                 questions, gt_answer = request.get_questions(batch_size, start_idx=i)

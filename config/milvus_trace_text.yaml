@@ -1,0 +1,65 @@
+run_name: milvus_trace_text
+bench:
+  dataset: wikimedia/wikipedia
+  type: text
+  preprocessing:
+    chunk_overlap: 0
+    chunk_size: 512
+    chunktype: length
+    dataset_ratio: 0.00001
+rag:
+  action:
+    preprocess: true
+    embedding: true
+    insert: true
+    build_index: true
+    retrieval: true
+    reranking: false
+    generation: true
+    evaluate: false
+  embedding:
+    device: ${RAG_DEVICE}
+    sentence_transformers_name: sentence-transformers/all-MiniLM-L6-v2
+    batch_size: 64
+    embedding_framework: sentence_transformers
+    model: sentence-transformers/all-MiniLM-L6-v2
+    store: false
+    load: false
+    filepath: ${MNTPNT}/cache/text-embeddings.pickle
+  insert:
+    batch_size: 512
+    collection_name: ""
+    drop_previous_collection: false
+  build_index:
+    index_type: IVF_FLAT
+    metric_type: L2
+  retrieval:
+    question_num: 16
+    retrieval_batch_size: 4
+    top_k: 10
+  generation:
+    device: ${GENERATION_DEVICE}
+    model: Qwen/Qwen2.5-7B-Instruct
+    parallelism: 1
+  pipeline:
+    batch_size: 4
+sys:
+  devices:
+    cpu: cpu
+    gpus: []
+    gpu_count: 0
+  log:
+    metrics_log: ./log/milvus_trace_text.log
+  vector_db:
+    type: milvus
+    db_path: ${MILVUS_URI}
+    db_token: root:Milvus
+    collection_name: ragperf_trace_text
+    drop_previous_collection: false
+    trace:
+      enabled: true
+      output_dir: ${MNTPNT}/artifacts/text
+      max_queue_bytes: 268435456
+      rows_per_shard: 65536
+      compression: zstd
+      on_overflow: invalidate

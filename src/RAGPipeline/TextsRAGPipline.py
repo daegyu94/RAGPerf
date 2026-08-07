@@ -71,6 +71,8 @@ class TextsRAGPipeline(BaseRAGPipeline):
                 self.reranker.load_reranker()
             self.responser.load_llm()
             cprint.iprintf(f"*** Loading models done")
+            if hasattr(self.retriever.client, "begin_timed_workload"):
+                self.retriever.client.begin_timed_workload()
 
             nrounds = int(math.ceil(request.req_count / batch_size))
             cprint.iprintf(f"*** Will run {nrounds} rounds")

@@ -20,6 +20,14 @@ DEFAULT_SYS_CONFIG = {
         "db_token": "root:Milvus",
         "collection_name": "",
         "drop_previous_collection": False,
+        "trace": {
+            "enabled": False,
+            "output_dir": "",
+            "max_queue_bytes": 268435456,
+            "rows_per_shard": 65536,
+            "compression": "zstd",
+            "on_overflow": "invalidate",
+        },
     },
     "log": {
         "metrics_log": "./log/default_run.log",
@@ -68,6 +76,15 @@ DEFAULT_RAG_CONFIG = {
         "model": "Qwen/Qwen2.5-7B-Instruct",
         "device": "cuda:0",
     },
+    "audio": {
+        "dataset_config": "clean",
+        "split": "train.100",
+        "streaming": False,
+        "sample_count": None,
+        "asr_model": "openai/whisper-tiny",
+        "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+        "device": "cpu",
+    },
     "evaluate": {
         "evaluator_model": "ragdata/Qwen2-7B-Instruct-GPTQ-Int8",
         "evaluator_embedding": "ragdata/bge-large-zh-v1.5",
@@ -76,6 +93,7 @@ DEFAULT_RAG_CONFIG = {
 
 DEFAULT_BENCHMARK_CONFIG = {
     "dataset": "wikimedia/wikipedia",
+    "type": "text",
     "preprocessing": {
         "chunktype": "length",
         "chunk_size": 512,
@@ -84,6 +102,8 @@ DEFAULT_BENCHMARK_CONFIG = {
     },
 }
 
+
+_ENV_PATTERN = re.compile(r"\$(?:\{[^}]+\}|[A-Za-z_][A-Za-z0-9_]*)")
 
 def load_config(config_path):
     # check
@@ -94,7 +114,14 @@ def load_config(config_path):
     # load
     print(f"load config file: {config_path}")
     with open(config_path, "r") as file:
-        return yaml.safe_load(file)
+        content = os.path.expandvars(file.read())
+    unresolved = _ENV_PATTERN.findall(content)
+    if unresolved:
+        raise ValueError(
+            "config contains unset environment variable(s): "
+            + ", ".join(sorted(set(unresolved)))
+        )
+    return yaml.safe_load(content)
 
 
 def config_to_log_path(config_path="config/config.yaml") -> str:
