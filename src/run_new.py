@@ -32,33 +32,10 @@ def main():
     import _pickle as cPickle
 
     from vectordb.milvus_api import milvus_client
-    from vectordb.lancedb_api import lance_client
-    from vectordb.qdrant_api import qdrant_client
-    from vectordb.chroma_api import chroma_client
-    from vectordb.elastic_api import elastic_client
 
-    from datasetLoader.TextDatasetLoader import TextDatasetLoader
-    from datasetPreprocess.TextDatasetPreprocess import TextDatasetPreprocess
-    from datasetLoader.PDFDatasetLoader import PDFDatasetLoader
     from datasetLoader.AudioDatasetLoader import AudioDatasetLoader
     from encoder.AudioEncoder import AudioEncoder
     from RAGPipeline.AudioRAGPipeline import AudioRAGPipeline
-
-    from datasetPreprocess.PDFDatasetPreprocess import PDFDatasetPreprocess
-
-    from RAGRequest.TextsRAGRequest import WikipediaRequests
-    from RAGPipeline.TextsRAGPipline import TextsRAGPipeline
-    from RAGPipeline.ImageRAGPipline import ImagesRAGPipeline
-    from RAGPipeline.retriever.BaseRetriever import BaseRetriever
-    from RAGPipeline.reranker.CrossEncoderReranker import CrossEncoderReranker
-    from RAGPipeline.responser.TextsResponser import VLLMResponser
-    from RAGPipeline.responser.ImagesResponser import ImageResponser
-
-    from encoder.sentenceTransformerEncoder import SentenceTransformerEncoder
-    from encoder.ColPaliEncoder import ColPaliEncoder
-    from evaluator.RagasEvaluator import RagasEvaluator
-    from evaluator.RagasOpenAI import RagasOpenAI
-    from evaluator.Ragasvllm import Ragasvllm
 
     # avoid warning about TOKENIZERS_PARALLELISM
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -117,6 +94,8 @@ def main():
             trace=config["sys"]["vector_db"].get("trace"),
         )
     elif config["sys"]["vector_db"]["type"] == "lancedb":
+        from vectordb.lancedb_api import lance_client
+
         db_client = lance_client(
             db_path=config["sys"]["vector_db"]["db_path"],
             collection_name=collection_name,
@@ -128,6 +107,8 @@ def main():
             ],
         )
     elif config["sys"]["vector_db"]["type"] == "qdrant":
+        from vectordb.qdrant_api import qdrant_client
+
         db_client = qdrant_client(
             db_path=config["sys"]["vector_db"]["db_path"],
             collection_name=collection_name,
@@ -139,6 +120,8 @@ def main():
             ],
         )
     elif config["sys"]["vector_db"]["type"] == "chroma":
+        from vectordb.chroma_api import chroma_client
+
         db_client = chroma_client(
             db_path=config["sys"]["vector_db"]["db_path"],
             collection_name=collection_name,
@@ -150,6 +133,8 @@ def main():
             ],
         )
     elif config["sys"]["vector_db"]["type"] == "elasticsearch":
+        from vectordb.elastic_api import elastic_client
+
         db_client = elastic_client(
             db_path=config["sys"]["vector_db"]["db_path"],
             collection_name=collection_name,
@@ -296,9 +281,16 @@ def main():
             )
         if hasattr(db_client, "close_trace"):
             db_client.close_trace()
+        monitor.close()
         return
     # for image RAG
     if config["bench"]["type"] == "image":
+        from datasetLoader.PDFDatasetLoader import PDFDatasetLoader
+        from datasetPreprocess.PDFDatasetPreprocess import PDFDatasetPreprocess
+        from RAGRequest.TextsRAGRequest import WikipediaRequests
+        from RAGPipeline.retriever.BaseRetriever import BaseRetriever
+        from encoder.ColPaliEncoder import ColPaliEncoder
+
         pass
         # preprocess dataset
         with monitor:
@@ -383,6 +375,9 @@ def main():
                 retrieval_batch_size=config["rag"]["retrieval"]["retrieval_batch_size"],
                 client=db_client,
             )
+            from RAGPipeline.ImageRAGPipline import ImagesRAGPipeline
+            from RAGPipeline.responser.ImagesResponser import ImageResponser
+
             responser = ImageResponser(
                 model=config["rag"]["generation"]["model"],
                 device=config["rag"]["generation"]["device"],
@@ -408,9 +403,19 @@ def main():
                 )
         if hasattr(db_client, "close_trace"):
             db_client.close_trace()
+        monitor.close()
 
         return
     elif config["bench"]["type"] == "text":
+        from datasetLoader.TextDatasetLoader import TextDatasetLoader
+        from datasetPreprocess.TextDatasetPreprocess import TextDatasetPreprocess
+        from datasetLoader.PDFDatasetLoader import PDFDatasetLoader
+        from datasetPreprocess.PDFDatasetPreprocess import PDFDatasetPreprocess
+        from RAGRequest.TextsRAGRequest import WikipediaRequests
+        from RAGPipeline.retriever.BaseRetriever import BaseRetriever
+        from RAGPipeline.reranker.CrossEncoderReranker import CrossEncoderReranker
+        from encoder.sentenceTransformerEncoder import SentenceTransformerEncoder
+
         # preprocess dataset
         if config["rag"]["action"]["preprocess"]:
             # if True:
@@ -545,6 +550,9 @@ def main():
             print(f"***End request preparation")
 
             # prepare pipeline
+            from RAGPipeline.TextsRAGPipline import TextsRAGPipeline
+            from RAGPipeline.responser.TextsResponser import VLLMResponser
+
             retriever = BaseRetriever(
                 collection_name=collection_name,
                 top_k=config["rag"]["retrieval"]["top_k"],
@@ -560,6 +568,8 @@ def main():
             else:
                 reranker = None
             if config["rag"]["action"]["evaluate"]:
+                from evaluator.Ragasvllm import Ragasvllm
+
                 evaluator = Ragasvllm(
                     llm_path=config["rag"]["evaluate"]["evaluator_model"],
                 )
@@ -594,6 +604,7 @@ def main():
                 )
         if hasattr(db_client, "close_trace"):
             db_client.close_trace()
+        monitor.close()
 
 
 if __name__ == "__main__":

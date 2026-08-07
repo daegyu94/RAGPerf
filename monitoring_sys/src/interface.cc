@@ -73,6 +73,9 @@ SystemID getMonitoringSystem(
     const std::string &output_dir, unsigned default_sample_period_ms = 500) {
     return constructNewSystem(output_dir, default_sample_period_ms);
 }
+bool destroyMonitoringSystem(SystemID id) { return MSys::destroyMonitoringSystem(id); }
+
+
 
 /**
  * Add a monitor probe to CPU
@@ -238,7 +241,7 @@ bool testRun(SystemID id, bool fail_on_error = false) {
 // FIXME: This also does not work with overloaded functions
 #define MSYS_BIND(m, func, ...)                                                                    \
     m.def(#func, &MSys::Interface::func, PyDoc_STR(DOC(MSys, Interface, func)), ##__VA_ARGS__)
-#define INTERFACE_DOCSTR (PyDoc_STR(DOC(PYBIND11, MODULE)))
+#define INTERFACE_DOCSTR (PyDoc_STR("Interface for System Performance Monitor"))
 #else
 // No pybind11-mkdoc is found
 // Fallback to simple binding of function name only
@@ -261,6 +264,7 @@ PYBIND11_MODULE_WRAPPED(MSYS_MODNAME, m) {
     m.doc() = INTERFACE_DOCSTR;
 
     // === Interface functions ===
+    MSYS_BIND(m, destroyMonitoringSystem);
     MSYS_BIND(m, initialize);
     MSYS_BIND(m, getMonitoringSystem);
     MSYS_BIND(m, addCPUMeterToSystem);

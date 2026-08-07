@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import atexit
+
 import sys
 from unittest import mock
 
@@ -54,7 +56,12 @@ class MSys:
 
     def __init__(self, msys_config: MSysConfig):
         self.__msys_config = msys_config
-        self.__msys_id = lms.getMonitoringSystem(**msys_config.init_config)
+        init_config = msys_config.init_config
+        self.__msys_id = lms.getMonitoringSystem(
+            init_config["output_dir"], init_config.get("default_sample_period_ms", 500)
+        )
+        self.__closed = False
+        atexit.register(self.close)
         self.__msys_add_meter_functions = self.msys_add_monitor_functions
 
         for meter_property in msys_config.meter_configs:
@@ -67,13 +74,39 @@ class MSys:
                 f"Unknown meter type: {meter_type}, "
                 f"available meters: {list(self.__msys_add_meter_functions.keys())}"
             )
-            ret = add_meter_func(self.__msys_id, **meter_property)
+            positional_args = {
+                "addCPUMeterToSystem": ("sample_period_ms",),
+                "addGPUMeterToSystem": (
+                    "gpu_ids", "nvml_metrics", "gpm_metrics", "sample_period_ms"
+                ),
+                "addDiskMeterToSystem": ("devices", "sample_period_ms"),
+                "addProcMeterToSystem": ("pids", "probes", "sample_period_ms"),
+                "addMemMeterToSystem": ("probes", "sample_period_ms"),
+            }.get(getattr(add_meter_func, "__name__", ""))
+            if positional_args is not None:
+                ret = add_meter_func(
+                    self.__msys_id,
+                    *(
+                        meter_property.get(name, 0 if name == "sample_period_ms" else [])
+                        for name in positional_args
+                    ),
+                )
+            else:
+                ret = add_meter_func(self.__msys_id, **meter_property)
             assert (
                 ret
             ), f"Failed to add meter: {meter_type} with properties: {json.dumps(meter_property)}"
 
     def test_run(self) -> bool:
         return lms.testRun(self.__msys_id)
+
+    def close(self) -> bool:
+        """Stop and release this monitoring system before interpreter shutdown."""
+
+        if self.__closed:
+            return False
+        self.__closed = True
+        return lms.destroyMonitoringSystem(self.__msys_id)
 
     def report_status(self, verbose: bool = False, detail: bool = False) -> None:
         lms.reportStatus(self.__msys_id, verbose, detail)

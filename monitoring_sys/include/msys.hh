@@ -224,5 +224,6 @@ SystemID constructNewSystem(
     const size_t msg_write_size_threshold = default_msg_write_size_threshold);
 std::shared_ptr<System> retrieveSystemUsingIndex(SystemID id);
 bool msysTestRun();
+bool destroyMonitoringSystem(SystemID id);
 
 }  // namespace MSys

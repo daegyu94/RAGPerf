@@ -653,6 +653,19 @@ std::shared_ptr<System> retrieveSystemUsingIndex(SystemID id) {
     return result->second;
 }
 
+bool destroyMonitoringSystem(SystemID id) {
+    using Detail::existing_systems;
+
+    auto result = existing_systems.find(id);
+    if (result == existing_systems.end()) return false;
+
+    if (result->second->stopRecording()) {
+        LOG(INFO) << absl::StrFormat("[MSys] #%u stopped before destruction", id);
+    }
+    existing_systems.erase(result);
+    return true;
+}
+
 bool msysTestRun(SystemID id) {
     std::shared_ptr<System> system = retrieveSystemUsingIndex(id);
     if (!system) return false;
