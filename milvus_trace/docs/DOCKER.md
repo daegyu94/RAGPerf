@@ -12,6 +12,11 @@ record는 source RAG workload의 model load와 embedding/generation timing을 �
 하므로 RAGPerf가 설치된 record host에서 실행합니다. record artifact를 복사한 뒤
 replay image로 target Milvus에 재생하는 구조입니다.
 
+이 image는 Milvus server를 시작하지 않습니다. 실행 전에 standalone Milvus endpoint를
+별도로 준비하고, `--uri`가 replayer container에서 접근 가능한 주소를 가리키게 합니다.
+첫 테스트에서는 standalone 서버 하나를 source와 target에 함께 사용할 수 있으며,
+replay에는 source collection과 다른 새 collection 이름을 사용합니다.
+
 ```text
 RAGPerf record host ── artifact directory/tar.zst ──> replay host
        │                                                   │

@@ -4,8 +4,9 @@
 dataset, embedding/ASR, generation 의존성이 필요하고 replay에는 Milvus client만
 필요합니다.
 
-먼저 [Milvus trace 설치](../README.md#1-설치)를 완료하고, source와 target Milvus가
-각 record/replay host에서 접근 가능한지 확인합니다.
+먼저 [Milvus trace 설치](../README.md#1-설치)와 standalone Milvus 서버 준비를
+완료합니다. 처음 테스트에서는 하나의 서버를 record와 replay에 함께 사용하고, source
+collection과 target collection만 서로 다르게 지정하면 됩니다.
 
 ## Workload별 요구 사항
 
@@ -13,11 +14,14 @@ dataset, embedding/ASR, generation 의존성이 필요하고 replay에는 Milvus
 | --- | --- | --- |
 | Text | Sentence Transformers, vLLM 지원 GPU, Wikipedia/Natural Questions download | Dataset, embedding/generation model, GPU |
 | Image | Poppler, ColPali, vision LLM 지원 GPU, ArXiv PDF download | PDF, Poppler, ColPali, vision LLM, GPU |
-| Audio | Audio decoder, Whisper, Sentence Transformers. 작은 run은 CPU 가능 | Audio file/decoder, Whisper, embedding model, GPU |
+| Audio | `torchcodec`, Whisper, Sentence Transformers. 작은 run은 CPU 가능 | Audio file/decoder, Whisper, embedding model, GPU |
 
 모든 record 명령은 monitoring system을 시작하므로 `src/monitoring_sys/libmsys*.so`와
 `--msys-config`가 필요합니다. Native replay에는 이 monitoring module이 필요하지
 않습니다.
+
+Audio smoke config는 generation/evaluate를 끄므로 vLLM 없이 실행할 수 있습니다. Text/Image
+generation 또는 evaluator를 켜는 config는 해당 vLLM 의존성을 추가로 설치해야 합니다.
 
 ## 공통 준비
 
@@ -25,10 +29,12 @@ source Milvus는 record 시 RAGPerf가 사용하는 endpoint이고, target Milvu
 재생할 endpoint입니다. 두 endpoint는 같아도 되지만 replay collection은 존재하지 않는
 새 이름이어야 합니다.
 
+처음 실행할 때는 다음처럼 같은 standalone 서버를 두 변수에 지정합니다.
+
 ```bash
 export MNTPNT=/path/to/ragperf-data
-export MILVUS_URI=http://source-milvus.example:19530
-export REPLAY_MILVUS_URI=http://target-milvus.example:19530
+export MILVUS_URI=http://localhost:19530
+export REPLAY_MILVUS_URI="$MILVUS_URI"
 export RAG_DEVICE=cuda:0
 export GENERATION_DEVICE=cuda:1
 export MSYS_CONFIG=config/monitor/example_config.yaml
@@ -38,6 +44,8 @@ export DOCKER_NETWORK=milvus-network
 export PYTHONPATH="$PWD:$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
 mkdir -p "$MNTPNT/artifacts" "$MNTPNT/results"
 ```
+
+서로 다른 Milvus 환경의 성능을 비교할 때만 두 URI를 각각 다른 서버로 바꿉니다.
 
 GPU가 하나라면 두 device 변수를 같은 값으로 지정할 수 있습니다. 모델이 CPU를
 지원하는 단계는 `RAG_DEVICE=cpu`로 실행할 수 있지만, VLLM/멀티모달 generation은

@@ -10,6 +10,9 @@ dataset, model, GPU는 필요하지 않습니다.
 ## 실행 전 확인
 
 - Artifact의 `incomplete`가 `false`이고 모든 checksum과 shard row 수가 일치해야 합니다.
+- Target은 이미 실행 중인 standalone 또는 distributed Milvus endpoint여야 합니다.
+  Replayer는 Milvus client일 뿐 server를 설치하거나 시작하지 않습니다. 처음 테스트할
+  때는 하나의 standalone endpoint를 record와 replay에 함께 사용할 수 있습니다.
 - Target Milvus에 collection/index 생성, insert, flush, load, search/query 권한이
   필요합니다.
 - `--collection`은 target에 아직 존재하지 않는 이름이어야 합니다.

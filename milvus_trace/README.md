@@ -17,6 +17,27 @@ Replay는 embedding, ASR, reranking, generation을 다시 실행하지 않습니
 server는 포함되지 않습니다. 처음에는 하나의 Milvus 서버를 record와 replay에 함께
 사용할 수 있고, 서로 다른 성능 환경을 비교할 때만 source와 target을 분리합니다.
 
+## Milvus 서버 준비
+
+실제 record와 replay에는 실행 중인 **standalone Milvus 서버**가 필요합니다. 이
+repository는 Milvus client, recorder, replayer를 제공하지만 Milvus server를 자동으로
+설치하거나 시작하지는 않습니다. 서버는 [Vector Database Module의 standalone
+설정 안내](../src/vectordb/README.md#2-milvus-gpu-via-docker-compose)에 따라 먼저
+준비합니다.
+
+처음 테스트할 때는 standalone 서버 하나만 `http://localhost:19530`에 실행하면
+됩니다. 같은 endpoint를 source와 target으로 사용하되, record collection과 replay
+collection 이름은 다르게 지정합니다. 두 서버가 필요한 경우는 서로 다른 Milvus
+환경의 성능을 비교할 때뿐입니다. Docker replay image도 서버를 포함하지 않으므로
+image에서 이 endpoint로 접근할 수 있어야 합니다.
+
+서버가 준비되었는지 확인하려면 다음을 실행합니다.
+
+```bash
+source .venv/bin/activate
+python -c "from pymilvus import MilvusClient; print(MilvusClient(uri='http://localhost:19530', token='root:Milvus').list_collections())"
+```
+
 ## 어떤 실행 방법을 선택해야 하나요?
 
 | 목적 | 필요한 환경 | 시작 문서 |
@@ -74,14 +95,16 @@ python -m pip install -r milvus_trace/docker/requirements-replay.lock
 
 Docker replay를 사용할 host에는 Python 환경이 필요하지 않습니다.
 
-## 2. Smoke test 선택
+## 2. Smoke test: 실제 record → replay
 
-Smoke test는 두 종류입니다. 목적에 따라 필요한 준비물이 다릅니다.
+이 문서에서 smoke test는 synthetic artifact 확인이 아니라, 실제 RAG record를 수행한
+뒤 같은 artifact를 새 collection에 replay하는 전체 경로입니다. Artifact-only 단계는
+설치 문제를 좁히기 위한 선택적인 사전 진단이며 smoke test에 포함하지 않습니다.
 
 | 종류 | 확인하는 것 | 필요한 것 | 실제 record/replay 전에 필수인가? |
 | --- | --- | --- | --- |
 | Artifact-only 설치 확인 | Python package, recorder, Parquet/checksum 형식 | Python replay package만 | 아니요. 실제 smoke test가 실패할 때 원인을 좁히는 선택 단계입니다. |
-| End-to-end smoke test | 실제 Audio RAG의 insert/index/search와 trace/replay | Record host 전체 환경 + Milvus 1개 | 네. 실제 RAG trace 경로를 사용하려면 이 테스트를 먼저 실행합니다. |
+| End-to-end smoke test (이 절의 smoke test) | 실제 Audio RAG의 insert/index/search와 trace/replay | Record host 전체 환경 + standalone Milvus 1개 | 네. 실제 RAG trace 경로를 확인하려면 실행합니다. |
 
 ### 2.1 Artifact-only 설치 확인 (실제 smoke test 아님)
 
@@ -105,20 +128,30 @@ python -c "from milvus_trace.artifact import verify_artifact; m = verify_artifac
 마지막 명령이 `ragperf-milvus-trace 0`을 출력하면 recorder와 checksum 검증만
 동작한 것입니다. 이 결과만으로 실제 RAG record가 준비되었다고 판단하지 마십시오.
 
-### 2.2 End-to-end smoke test (기본 smoke test)
+### 2.2 End-to-end smoke test: record → replay (기본)
 
 실제 record와 같은 `src/run_new.py`와 Audio RAG pipeline을 사용하되, dataset sample을
 8개, query를 4개로 줄입니다. 따라서 다음 단계의 full run으로 가기 전에 dataset/model
 download, monitoring, source Milvus insert/index/search, artifact 생성과 replay를 한 번에
 검증할 수 있습니다.
 
-이 테스트에는 [Record host](#record-host)에 적힌 전체 Python 의존성, monitoring
-`libmsys*.so`, Whisper와 embedding model, 그리고 실행 중인 Milvus 서버가 필요합니다.
-GPU는 필요하지 않도록 CPU 설정을 사용합니다. 단, model download와 CPU inference 때문에
-시간이 걸릴 수 있습니다.
+이 테스트에는 Audio record에 필요한 Python 의존성(`datasets`, `torchcodec`,
+`transformers`, `sentence-transformers`, `soundfile`, `pymilvus`), monitoring
+`libmsys*.so`, Whisper와 embedding model, 그리고 실행 중인 standalone Milvus 서버가
+필요합니다. RAGPerf가 Milvus 서버를 시작해 주지는 않으므로 이 단계를 먼저 완료해야
+합니다. GPU는 필요하지 않도록 CPU 설정을 사용합니다. 단, model download와 CPU
+inference 때문에 시간이 걸릴 수 있습니다.
 
-먼저 하나의 Milvus 서버가 `localhost:19530`에서 실행 중인지 확인합니다. 같은 서버를
-source와 target 역할에 함께 사용하며, replay 때는 새로운 collection 이름을 사용합니다.
+이 smoke config는 `hf-internal-testing/librispeech_asr_dummy`의 `validation` split에서
+실제 오디오를 8개만 읽습니다. 전체 LibriSpeech를 받지 않으므로 첫 기능 확인에 적합하며,
+일반 Audio run은 `config/milvus_audio.yaml`의 `openslr/librispeech_asr`를 사용합니다.
+Audio record host에는 `torchcodec`가 필요합니다. 이 config는 `generation: false`와
+`evaluate: false`이므로 Audio smoke만 실행할 때 vLLM은 필요하지 않습니다.
+
+
+먼저 위의 확인 명령으로 standalone Milvus 서버가 `localhost:19530`에서 실행 중인지
+확인합니다. 같은 서버를 source와 target 역할에 함께 사용하며, replay 때는 새로운
+collection 이름을 사용합니다.
 
 ```bash
 export MNTPNT="$PWD/artifacts/audio-smoke-run-001"

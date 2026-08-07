@@ -11,6 +11,12 @@ Whisper 계열 ASR로 transcript를 만든 뒤 문장 임베딩을 생성합니�
 지정합니다. 먼저 기능을 확인할 때는 `cpu`와 작은 `sample_count`를 사용하는 것이
 편리합니다.
 
+Audio record에는 `torchcodec`가 필요합니다. `config/milvus_audio_smoke.yaml`은
+`hf-internal-testing/librispeech_asr_dummy`의 `validation` split을 streaming으로 읽어
+실제 오디오 8개만 처리합니다. 전체 workload는 `config/milvus_audio.yaml`의
+`openslr/librispeech_asr`를 사용합니다. `torchcodec`가 사용하는 FFmpeg shared library도
+설치되어 있어야 하며, `ffmpeg -version`으로 확인할 수 있습니다.
+
 처음 실행하기 전에 [record host 설치](../README.md#record-host)를 완료합니다. Config의
 `sys.vector_db.collection_name`과 `trace.output_dir`은 이전 run에서 사용하지 않은 값을
 선택합니다.
@@ -58,7 +64,7 @@ replay 단계에서는 Whisper, `torch`, CUDA가 필요하지 않습니다. sear
 ## 지원 범위
 
 - 지원 dataset: Hugging Face `load_dataset`로 읽을 수 있는 ASR dataset
-- 기본값: `librispeech_asr`, `clean`, `train.100`
+- 기본값: `openslr/librispeech_asr`, `clean`, `train.100`
 - 지원 작업: corpus insert, index 생성, audio query의 Milvus search
 - generation/reranking: Audio RAG 경로에서는 선택적 후처리로 남겨 두며,
   trace artifact는 Milvus 요청까지만 재생합니다.

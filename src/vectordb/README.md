@@ -35,6 +35,9 @@ vector_db:
 
 ### 2. Milvus (GPU via Docker Compose)
 
+Milvus는 별도 server process가 필요한 standalone/client-server 구조입니다. 처음
+테스트할 때는 standalone 서버 한 대를 실행하고 `http://localhost:19530`을 config의
+`db_path`로 지정합니다.
 If you plan to use **Milvus** as the vector store, follow the official guide to run Milvus with GPU support using Docker Compose:
 ➡️ **[Run Milvus with GPU Support Using Docker Compose](https://milvus.io/docs/install_standalone-docker-compose-gpu.md)**
 
