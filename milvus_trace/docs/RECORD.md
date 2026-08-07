@@ -1,0 +1,177 @@
+# 기록(Record)
+
+Recorder는 RAGPerf의 Milvus client wrapper에서 실제 client 호출 직전의 인자를
+캡처합니다. 요청 thread는 disk write를 기다리지 않고 bounded queue에 기록을 넘기며,
+background writer가 Parquet shard와 manifest를 만듭니다.
+
+처음 실행한다면 먼저 [빠른 시작](../README.md#3-실제-workload-기록)을 따라 Text
+artifact 하나를 만든 뒤 이 문서에서 세부 동작을 확인하는 순서를 권장합니다.
+
+## 실행 전 확인
+
+- RAGPerf 전체 의존성과 workload별 dataset/model dependency를 설치합니다.
+- `src/monitoring_sys/libmsys*.so`를 build합니다. `src/run_new.py` 실행에 필요합니다.
+- Source Milvus에 collection 생성, insert, index 생성, search/query 권한이 있어야 합니다.
+- Repository root와 `src`를 모두 Python import path에 둡니다.
+- Artifact를 담을 충분한 disk 공간을 확인합니다. Insert vector와 scalar metadata가
+  Parquet에 저장되므로 corpus가 커지면 artifact도 커집니다.
+
+```bash
+source .venv/bin/activate
+export PYTHONPATH="$PWD:$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
+```
+
+## Run마다 새로 정할 값
+
+다음 두 대상은 이전 run과 공유하지 않습니다.
+
+1. `trace.output_dir`: 존재하지 않거나 비어 있는 directory
+2. `sys.vector_db.collection_name`: source Milvus에 아직 존재하지 않는 collection
+
+Recorder는 기존 artifact directory를 검사하거나 정리하지 않습니다. 같은 경로를 다시
+사용하면 shard와 manifest 일부를 덮어쓰거나 이전 파일을 남길 수 있습니다. 기존 source
+collection을 재사용하면 collection 생성 metadata가 record되지 않아 replay가 vector
+dimension을 찾지 못할 수 있습니다.
+
+예시 config의 collection 이름을 `ragperf_trace_text_run_001`처럼 run별로 바꾸고,
+`MNTPNT`도 run 전용 경로로 지정하면 실수를 줄일 수 있습니다.
+
+## 공통 환경 변수
+
+예시 config는 shell 환경 변수를 시작 시점에 확장합니다.
+
+```bash
+export MNTPNT=/path/to/ragperf-data/run-001
+export MILVUS_URI=http://source-milvus.example:19530
+export RAG_DEVICE=cuda:0
+export GENERATION_DEVICE=cuda:1
+export MSYS_CONFIG=config/monitor/example_config.yaml
+```
+
+설정되지 않은 `${...}`가 config에 남아 있으면 RAGPerf는 dataset이나 model을 load하기
+전에 `config contains unset environment variable(s)` 오류를 반환합니다.
+
+## Trace 설정
+
+`sys.vector_db.trace`에서 recorder를 활성화합니다.
+
+```yaml
+sys:
+  vector_db:
+    type: milvus
+    trace:
+      enabled: true
+      output_dir: ${MNTPNT}/artifacts/text
+      max_queue_bytes: 268435456
+      rows_per_shard: 65536
+      compression: zstd
+      on_overflow: invalidate
+```
+
+| 설정 | 기본값 | 의미 |
+| --- | ---: | --- |
+| `enabled` | `false` | `true`일 때 recorder 생성 |
+| `output_dir` | 빈 문자열 | manifest와 Parquet shard를 기록할 directory. 활성화 시 필수 |
+| `max_queue_bytes` | `268435456` | 요청 thread와 writer 사이 queue의 byte 상한 |
+| `rows_per_shard` | `65536` | Parquet shard 하나의 최대 row 수 |
+| `compression` | `zstd` | PyArrow에 전달할 Parquet compression codec |
+| `on_overflow` | `invalidate` | 현재 유일한 지원값. Source 요청은 계속하고 artifact는 불완전 처리 |
+
+기본값을 사용할 때는 `enabled`와 `output_dir`만 지정해도 됩니다. 알 수 없는 trace
+설정이나 0 이하의 queue/shard 크기는 실행 초기에 거부됩니다.
+
+## 기록 구간
+
+RAGPerf는 다음 두 구간을 구분합니다.
+
+```text
+Setup                                           Timed workload
+
+corpus insert ── index create ── model load ── marker ── search/query/insert ...
+     │                                                │
+     └── corpus-*.parquet                             └── events-*.parquet
+```
+
+- Index 생성 전이면서 timed marker도 설정되지 않은 `insert`는 bootstrap corpus입니다.
+- Text/Image pipeline은 model load 후 첫 query embedding 직전에 marker를 설정합니다.
+- Audio pipeline도 query encoder를 load한 뒤 첫 audio batch embedding 전에 marker를
+  설정합니다.
+- 첫 search offset에는 첫 query embedding/ASR 시간이 포함됩니다.
+- 이후 event 간격에는 retrieval, reranking, generation 등 다음 Milvus 호출 전까지의
+  upstream 시간이 포함됩니다.
+- `begin_timed_workload()`를 호출하지 않은 integration에서는 첫 search/query/late
+  insert가 자동으로 offset 0의 첫 event가 됩니다.
+
+Recorder가 재현 가능한 것은 Milvus 요청 payload, 순서, 도착 간격입니다. GPU kernel이나
+model execution 자체를 artifact에 저장하지 않습니다.
+
+## 저장하는 데이터
+
+| Operation | 저장하는 값 | 저장하지 않는 값 |
+| --- | --- | --- |
+| bootstrap/timed `insert` | vector, JSON 호환 scalar와 text, client parameter | Milvus response |
+| `search` | query vector, limit/filter/output field/search parameter | 사용자가 입력한 query 원문, result |
+| `query` | filter와 query parameter | query result |
+
+NumPy scalar/array처럼 `tolist()` 또는 `item()`으로 변환 가능한 값은 JSON 값으로
+정규화합니다. JSON으로 표현할 수 없는 객체가 parameter에 들어오면 Milvus 요청을
+보내기 전에 `TypeError`로 실패합니다.
+
+## Workload 실행
+
+| Workload | Config | 기본 artifact directory |
+| --- | --- | --- |
+| Text | `config/milvus_trace_text.yaml` | `$MNTPNT/artifacts/text` |
+| Image | `config/milvus_trace_image.yaml` | `$MNTPNT/artifacts/image` |
+| Audio | `config/milvus_audio.yaml` | `$MNTPNT/artifacts/audio` |
+
+실제 명령, model/GPU 요구 사항, 작은 run을 만드는 설정은
+[workload별 예시](WORKLOADS.md)를 참조합니다.
+
+## 완료 확인
+
+Manifest와 `SHA256SUMS`는 recorder가 정상적으로 닫힐 때 생성됩니다. Process를
+`SIGKILL`로 종료하거나 host가 중단되면 이 파일이 없거나 불완전할 수 있습니다.
+
+```bash
+python -c "from milvus_trace.artifact import verify_artifact; m = verify_artifact('$MNTPNT/artifacts/text'); print('events:', m['event_count'], 'operations:', m['operation_counts'])"
+```
+
+성공하면 event 수와 operation별 수가 출력됩니다. 정상 artifact의 예시는 다음과
+같습니다. 실제 file 종류와 shard 수는 workload에 따라 달라집니다.
+
+```text
+workload-manifest.yaml
+SHA256SUMS
+corpus-00000.parquet
+events-00000.parquet
+searches-00000.parquet
+scalar-queries-00000.parquet   # query가 있을 때만 생성
+inserts-00000.parquet          # timed insert가 있을 때만 생성
+```
+
+`verify_artifact()`는 format, `incomplete`, checksum, manifest에 기록된 shard row 수를
+검사합니다. 출력 파일의 의미는 [artifact 형식](ARTIFACT_FORMAT.md)을 참조합니다.
+
+## Queue overflow와 writer 오류
+
+Queue가 `max_queue_bytes`를 초과하거나 writer에서 오류가 발생해도 이미 진행 중인 source
+Milvus workload는 계속 실행합니다. Recorder는 첫 오류 원인을
+`incomplete_reason`에 남기고 종료 시 다음과 같이 처리합니다.
+
+1. `incomplete: true` manifest와 checksum을 기록합니다.
+2. `TraceRecordingError`를 발생시켜 record command를 실패시킵니다.
+3. Replayer의 `verify_artifact()`가 해당 artifact를 거부합니다.
+
+부분 artifact를 정상 workload처럼 사용하지 마십시오. Queue overflow라면 source
+workload를 바꾸지 않은 상태에서 `max_queue_bytes`를 늘리고 새 directory와 새 source
+collection으로 다시 기록합니다.
+
+## 개인정보와 민감 정보
+
+Artifact에는 Milvus에 실제 insert한 text와 scalar metadata가 평문 JSON/Parquet로
+들어갑니다. API token은 manifest에 저장하지 않지만 dataset의 text, file path, document
+identifier는 저장될 수 있습니다. 공유하기 전에 workload별 payload 정책을 확인합니다.
+
+Audio의 원본 bytes와 query transcript 보존 범위는 [Audio 문서](AUDIO.md)에 설명되어
+있습니다.
