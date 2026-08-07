@@ -1,0 +1,17 @@
+pymilvus==2.6.17
+pyarrow==25.0.0
+numpy==2.5.1
+PyYAML==6.0.3
+cachetools==7.1.7
+grpcio==1.83.0
+orjson==3.11.9
+pandas==3.0.5
+protobuf==7.35.1
+python-dotenv==1.2.2
+requests==2.34.2
+python-dateutil==2.9.0.post0
+six==1.17.0
+certifi==2026.7.22
+charset-normalizer==3.4.9
+idna==3.18
+urllib3==2.7.0
