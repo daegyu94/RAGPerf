@@ -112,7 +112,7 @@ Monitoring build를 건너뛰거나 위치를 바꾸려면 다음 옵션을 사�
 
 ```bash
 # install pip-compile for Python package dependency resolution
-python -m pip install pip-tools
+python -m pip install "pip==25.3" "pip-tools==7.5.2"
 
 # generate the project requirements file at the repository root
 cmake -S . -B build

@@ -98,7 +98,7 @@ fi
 mkdir -p "$BUILD_DIR"
 echo "Using Python: $VENV_PYTHON"
 echo "Using CMake build directory: $BUILD_DIR"
-"$VENV_PYTHON" -m pip install --upgrade pip pip-tools
+"$VENV_PYTHON" -m pip install --upgrade "pip==25.3" "pip-tools==7.5.2"
 cmake -S "$REPO_ROOT" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release
 cmake --build "$BUILD_DIR" --target generate_py3_requirements
 [[ -f "$REPO_ROOT/requirement.txt" ]] || die "CMake did not generate requirement.txt"

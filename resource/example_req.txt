@@ -309,7 +309,7 @@ urllib3==2.3.0
 uv==0.8.15
 uvicorn==0.35.0
 uvloop==0.21.0
-vllm==0.8.0
+vllm==0.8.5.post1
 warc3-wet==0.2.5
 warc3-wet-clueweb09==0.2.5
 watchfiles==1.1.0
@@ -318,7 +318,7 @@ wcwidth==0.2.13
 websocket-client==1.9.0
 websockets==15.0.1
 xformers==0.0.29.post2
-xgrammar==0.1.16
+xgrammar==0.1.18
 xlsxwriter==3.2.5
 xxhash==3.5.0
 yarl==1.20.1
