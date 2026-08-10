@@ -16,6 +16,9 @@ requirements.txt
 # build artifacts
 build/
 
+# RAGPerf-managed Milvus standalone data
+.milvus/
+
 # dataset data
 *.csv
 *.arrow

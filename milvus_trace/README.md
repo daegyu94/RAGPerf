@@ -20,10 +20,51 @@ server는 포함되지 않습니다. 처음에는 하나의 Milvus 서버를 rec
 ## Milvus 서버 준비
 
 실제 record와 replay에는 실행 중인 **standalone Milvus 서버**가 필요합니다. 이
-repository는 Milvus client, recorder, replayer를 제공하지만 Milvus server를 자동으로
-설치하거나 시작하지는 않습니다. 서버는 [Vector Database Module의 standalone
-설정 안내](../src/vectordb/README.md#2-milvus-gpu-via-docker-compose)에 따라 먼저
-준비합니다.
+repository는 Milvus client, recorder, replayer와 함께 RAGPerf용 standalone 서버를
+시작하는 helper를 제공합니다. Docker Engine과 Docker Compose v2 자체는 먼저
+설치되어 있어야 합니다.
+
+repository root에서 다음 명령을 실행하면 됩니다.
+
+```bash
+./scripts/milvus-standalone.sh start
+```
+
+helper는 저장소에 포함된
+[`milvus-standalone-compose.yml`](docker/milvus-standalone-compose.yml)을 사용하여
+Milvus, embedded etcd, MinIO 컨테이너를 시작하고 `19530` 포트가 열릴 때까지
+기다립니다. 기본 Milvus image는 E2E smoke test에서 확인한 `v2.4.15`입니다.
+image를 Docker Hub에서 받으므로 첫 실행에는 네트워크와 충분한 disk 공간이 필요합니다.
+
+설치 위치와 데이터 위치는 다음과 같이 구분됩니다.
+
+| 항목 | 기본 위치 | 설명 |
+| --- | --- | --- |
+| Docker image/container 저장소 | Docker daemon 관리 위치 | `docker info --format '{{.DockerRootDir}}'`로 확인합니다. 일반적인 rootful Linux Docker에서는 `/var/lib/docker`입니다. |
+| Milvus/etcd/MinIO 영속 데이터 | `$PWD/.milvus/volumes` | Git에 포함되지 않으며, container를 `stop` 또는 `down`해도 유지됩니다. |
+| Milvus gRPC | `http://localhost:19530` | RAGPerf의 `MILVUS_URI`와 replay `--uri`에 사용합니다. |
+| Milvus WebUI | `http://localhost:9091/webui/` | 상태를 확인할 때 사용합니다. |
+
+데이터를 repository 밖에 두려면 시작 전에 `MILVUS_DATA_DIR`를 지정합니다.
+
+```bash
+export MILVUS_DATA_DIR=/path/to/milvus-data
+./scripts/milvus-standalone.sh start
+```
+
+주요 lifecycle 명령은 다음과 같습니다.
+
+```bash
+./scripts/milvus-standalone.sh status  # container와 저장 위치 확인
+./scripts/milvus-standalone.sh logs    # Milvus log 확인
+./scripts/milvus-standalone.sh stop    # 중지, 데이터 유지
+./scripts/milvus-standalone.sh down    # container 제거, 데이터 유지
+```
+
+Docker가 설치되어 있지 않거나 Docker daemon에 접근할 수 없는 경우에는 helper가
+명확한 오류를 출력하고 종료합니다. 운영/분산 Milvus를 사용할 때는 helper 대신
+[Vector Database Module의 standalone 또는 GPU 설정 안내](../src/vectordb/README.md#2-milvus-gpu-via-docker-compose)를
+따릅니다.
 
 처음 테스트할 때는 standalone 서버 하나만 `http://localhost:19530`에 실행하면
 됩니다. 같은 endpoint를 source와 target으로 사용하되, record collection과 replay
@@ -66,9 +107,8 @@ export PYTHONPATH="$PWD:$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
 `src/monitoring_sys/libmsys*.so`도 build되어 있어야 합니다. Workload별 추가 요구 사항은
 [workload 예시](docs/WORKLOADS.md#workload별-요구-사항)를 확인합니다.
 
-Milvus server 설치는 [Vector Database Module](../src/vectordb/README.md#2-milvus-gpu-via-docker-compose)을
-참조합니다. Record host에는 collection 생성, insert, index 생성, search/query 권한이
-필요합니다.
+Milvus server는 앞의 helper로 준비합니다. Record host에는 collection 생성, insert,
+index 생성, search/query 권한이 필요합니다.
 
 ### Docker 없이 Python으로 replay하는 경우
 

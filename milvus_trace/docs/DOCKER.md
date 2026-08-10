@@ -17,6 +17,10 @@ replay image로 target Milvus에 재생하는 구조입니다.
 첫 테스트에서는 standalone 서버 하나를 source와 target에 함께 사용할 수 있으며,
 replay에는 source collection과 다른 새 collection 이름을 사용합니다.
 
+repository root에서 `./scripts/milvus-standalone.sh start`를 실행하면 이 repository가
+제공하는 standalone helper로 테스트용 Milvus를 준비할 수 있습니다. helper가 시작하는
+Milvus server와 replay image는 별개의 Docker image입니다.
+
 ```text
 RAGPerf record host ── artifact directory/tar.zst ──> replay host
        │                                                   │
