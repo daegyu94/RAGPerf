@@ -3,7 +3,7 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
 COMPOSE_FILE="$REPO_ROOT/milvus_trace/docker/milvus-standalone-compose.yml"
 COMPOSE_PROJECT="${MILVUS_COMPOSE_PROJECT:-ragperf-milvus}"
 MILVUS_DATA_DIR="${MILVUS_DATA_DIR:-$REPO_ROOT/.milvus/volumes}"

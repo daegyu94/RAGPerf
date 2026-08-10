@@ -42,7 +42,7 @@ Milvus는 별도 server process가 필요한 standalone/client-server 구조입�
 RAGPerf smoke test에는 repository root에서 다음 helper를 사용하는 방법을 권장합니다.
 
 ```bash
-./scripts/milvus-standalone.sh start
+./milvus_trace/scripts/milvus-standalone.sh start
 ```
 
 이 helper는 Docker Engine/Compose를 설치하지는 않으며, Docker image는 Docker daemon의

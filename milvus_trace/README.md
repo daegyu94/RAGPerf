@@ -27,7 +27,7 @@ repository는 Milvus client, recorder, replayer와 함께 RAGPerf용 standalone 
 repository root에서 다음 명령을 실행하면 됩니다.
 
 ```bash
-./scripts/milvus-standalone.sh start
+./milvus_trace/scripts/milvus-standalone.sh start
 ```
 
 helper는 저장소에 포함된
@@ -49,16 +49,16 @@ image를 Docker Hub에서 받으므로 첫 실행에는 네트워크와 충분�
 
 ```bash
 export MILVUS_DATA_DIR=/path/to/milvus-data
-./scripts/milvus-standalone.sh start
+./milvus_trace/scripts/milvus-standalone.sh start
 ```
 
 주요 lifecycle 명령은 다음과 같습니다.
 
 ```bash
-./scripts/milvus-standalone.sh status  # container와 저장 위치 확인
-./scripts/milvus-standalone.sh logs    # Milvus log 확인
-./scripts/milvus-standalone.sh stop    # 중지, 데이터 유지
-./scripts/milvus-standalone.sh down    # container 제거, 데이터 유지
+./milvus_trace/scripts/milvus-standalone.sh status  # container와 저장 위치 확인
+./milvus_trace/scripts/milvus-standalone.sh logs    # Milvus log 확인
+./milvus_trace/scripts/milvus-standalone.sh stop    # 중지, 데이터 유지
+./milvus_trace/scripts/milvus-standalone.sh down    # container 제거, 데이터 유지
 ```
 
 Docker가 설치되어 있지 않거나 Docker daemon에 접근할 수 없는 경우에는 helper가
@@ -78,6 +78,17 @@ image에서 이 endpoint로 접근할 수 있어야 합니다.
 source .venv/bin/activate
 python -c "from pymilvus import MilvusClient; print(MilvusClient(uri='http://localhost:19530', token='root:Milvus').list_collections())"
 ```
+
+출력이 다음처럼 `[]`이면 정상입니다. 이는 **Milvus 서버에는 연결되었지만 아직
+collection이 하나도 없다**는 뜻입니다.
+
+```text
+[]
+```
+
+record를 실행한 뒤에는 생성된 collection 이름이 목록에 표시됩니다. 반대로
+`connection refused`, timeout, 인증 오류가 나오면 서버 실행 상태나 URI/token을
+확인해야 합니다.
 
 ## 어떤 실행 방법을 선택해야 하나요?
 
