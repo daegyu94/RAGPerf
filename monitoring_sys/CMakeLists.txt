@@ -16,13 +16,10 @@ set(PYBIND11_MKDOC_MODULE_PATH ${THIRD_PARTY_DIR}/pybind11_mkdoc)
 # check for libclang compatibility before aborting because of pybind11-mkdoc not found
 get_libclang_sharedlib_version(LIBCLANG_VERSION)
 if(NOT LIBCLANG_VERSION STREQUAL "")
-    # The system libclang patch version may not exist as a Python clang wheel.
-    # Keep the major/minor compatibility while letting pip select an available patch release.
-    set(CLANG_PYTHON_REQUIREMENT "clang~=${LIBCLANG_VERSION}")
     add_py3_pkg_dependencies(${INTERFACE_GEN_TARGET}
-        PKG_REQUIREMENTS ${CLANG_PYTHON_REQUIREMENT}
+        PKG_REQUIREMENTS clang==${LIBCLANG_VERSION}
     )
-    add_py3_pkg_requirements("${CLANG_PYTHON_REQUIREMENT}" ENV_SPECIFIC)
+    add_py3_pkg_requirements("clang==${LIBCLANG_VERSION}" ENV_SPECIFIC)
 else()
     message(WARNING "Failed to auto infer libclang version and set requirement for ${MSYS_TARGET}.")
 endif()

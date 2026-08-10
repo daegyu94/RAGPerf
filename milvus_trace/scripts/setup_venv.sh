@@ -95,14 +95,49 @@ if ! command_exists c++ && ! command_exists g++; then
     die "a C++ compiler is required; install a C++20-compatible compiler first"
 fi
 
+TMP_ROOT="${TMPDIR:-/tmp}"
+[[ "$TMP_ROOT" = /* ]] || die "TMPDIR must be an absolute path"
+SETUP_TMP_DIR="$(mktemp -d "$TMP_ROOT/ragperf-trace-setup.XXXXXX")"
+case "$SETUP_TMP_DIR" in
+    "$TMP_ROOT"/ragperf-trace-setup.*) ;;
+    *) die "mktemp created an unexpected temporary directory: $SETUP_TMP_DIR" ;;
+esac
+
+cleanup() {
+    if [[ -n "${SETUP_TMP_DIR:-}" && -d "$SETUP_TMP_DIR" ]]; then
+        case "$SETUP_TMP_DIR" in
+            "$TMP_ROOT"/ragperf-trace-setup.*) rm -rf -- "$SETUP_TMP_DIR" ;;
+        esac
+    fi
+}
+trap cleanup EXIT
+
+prepare_local_requirements() {
+    local root_requirements="$REPO_ROOT/resource/requirements.in"
+    local cmake_extra_requirements="$REPO_ROOT/resource/generated/extra.in"
+    local local_requirements="$SETUP_TMP_DIR/requirements.in"
+    [[ -f "$root_requirements" ]] || die "missing root requirements file: $root_requirements"
+    [[ -f "$cmake_extra_requirements" ]] || die "CMake did not generate $cmake_extra_requirements"
+    # Keep dependency ownership in the root project, while applying trace-local
+    # compatibility overrides without modifying any root-tracked file.
+    awk '!/^[[:space:]]*vllm([[:space:]]|=|<|>)/' "$root_requirements" > "$local_requirements"
+    printf '\n# Milvus trace compatibility overrides\nvllm==0.8.5.post1\n' >> "$local_requirements"
+    sed -E 's/^clang==([0-9]+\.[0-9]+)(.*)$/clang~=\1\2/' \
+        "$cmake_extra_requirements" >> "$local_requirements"
+    printf '%s\n' "$local_requirements"
+}
+
 mkdir -p "$BUILD_DIR"
 echo "Using Python: $VENV_PYTHON"
 echo "Using CMake build directory: $BUILD_DIR"
+export PATH="$VENV_DIR/bin:$PATH"
 "$VENV_PYTHON" -m pip install --upgrade "pip==25.3" "pip-tools==7.5.2"
 cmake -S "$REPO_ROOT" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release
-cmake --build "$BUILD_DIR" --target generate_py3_requirements
-[[ -f "$REPO_ROOT/requirement.txt" ]] || die "CMake did not generate requirement.txt"
-"$VENV_PYTHON" -m pip install -r "$REPO_ROOT/requirement.txt"
+LOCAL_REQUIREMENTS_IN="$(prepare_local_requirements)"
+LOCAL_REQUIREMENTS_LOCK="$SETUP_TMP_DIR/requirements.txt"
+"$VENV_DIR/bin/pip-compile" "$LOCAL_REQUIREMENTS_IN" \
+    --output-file "$LOCAL_REQUIREMENTS_LOCK" --strip-extras
+"$VENV_PYTHON" -m pip install -r "$LOCAL_REQUIREMENTS_LOCK"
 
 if (( ! SKIP_MONITORING )); then
     cmake --build "$BUILD_DIR" --target libmsys_pymod --parallel "$BUILD_JOBS"

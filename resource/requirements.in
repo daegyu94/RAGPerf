@@ -4,8 +4,7 @@ pybind11-stubgen
 absl-py
 
 # LLM inference and serving
-# vLLM 0.8.0 requires unavailable xgrammar 0.1.16 on current PyPI.
-vllm==0.8.5.post1
+vllm==0.8.0
 sentence_transformers
 ragas
 datasets

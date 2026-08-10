@@ -103,11 +103,23 @@ record를 실행한 뒤에는 생성된 collection 이름이 목록에 표시됩
 
 ## 1. 설치
 
+### Record host 전체 설치 (venv)
+
+실제 record를 처음 준비한다면 repository root에서 다음 스크립트를 실행합니다.
+
+```bash
+./milvus_trace/scripts/setup_venv.sh
+source .venv/bin/activate
+```
+
+스크립트는 root의 RAGPerf requirements를 바탕으로 임시 lock을 만들고, 현재 PyPI와
+호환되지 않는 일부 버전만 `milvus_trace` 범위에서 보정합니다. Docker, CUDA, C++ compiler와
+system package는 설치하지 않으므로 먼저 준비해야 합니다.
+
 ### Record host
 
-실제 workload를 기록하려면 먼저 루트 [Installation](../README.md#installation)에 따라
-RAGPerf 전체 의존성과 monitoring system을 설치합니다. 기존 project virtual
-environment가 있으면 새 환경을 만들지 말고 그 환경을 활성화합니다.
+실제 workload를 기록하려면 앞의 setup 스크립트를 완료해야 합니다. 기존 project virtual
+environment를 사용할 때는 새 환경을 만들지 말고 그 환경을 활성화합니다.
 
 ```bash
 source .venv/bin/activate
