@@ -5,11 +5,9 @@ from pathlib import Path
 
 
 SCRIPT = (
-    Path(__file__).parents[1]
-    / "benchmarks"
-    / "replayer"
-    / "staged_remote_replay.sh"
+    Path(__file__).parents[1] / "benchmarks" / "replayer" / "staged_remote_replay.sh"
 )
+RUN_DISKANN_SCRIPT = SCRIPT.with_name("run_diskann_replay.sh")
 
 
 def _write_executable(path: Path, content: str) -> None:
@@ -323,3 +321,12 @@ replay_milvus_uri: http://127.0.0.1:19530
 
     assert result.returncode != 0
     assert "topology paths must not be /" in result.stderr
+
+
+def test_diskann_replay_waits_for_milvus_client_readiness() -> None:
+    script = RUN_DISKANN_SCRIPT.read_text(encoding="utf-8")
+
+    readiness = script.index("client.list_collections()")
+    replay = script.index("python -m milvus_trace.replay")
+    assert readiness < replay
+    assert "Milvus Proxy was not ready" in script

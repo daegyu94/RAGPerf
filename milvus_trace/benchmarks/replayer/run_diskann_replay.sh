@@ -196,11 +196,25 @@ if ! (echo >/dev/tcp/127.0.0.1/"$host_port") >/dev/null 2>&1; then
   die "Milvus did not open port $host_port within ${wait_seconds}s"
 fi
 
+source "$project_root/.venv/bin/activate"
+milvus_ready=false
+while ((SECONDS < deadline)); do
+  if MILVUS_REPLAY_URI="$uri" MILVUS_REPLAY_TOKEN="$token" python -c 'import os; from pymilvus import MilvusClient; client = MilvusClient(uri=os.environ["MILVUS_REPLAY_URI"], token=os.environ["MILVUS_REPLAY_TOKEN"], timeout=2); client.list_collections(); client.close()' >/dev/null 2>&1; then
+    milvus_ready=true
+    break
+  fi
+  sleep 2
+done
+if [[ "$milvus_ready" != true ]]; then
+  compose ps >> "$output_dir/run-metadata.txt" 2>&1 || true
+  compose logs --tail=200 standalone > "$output_dir/milvus-failure.log" 2>&1 || true
+  die "Milvus Proxy was not ready within ${wait_seconds}s"
+fi
+echo "milvus_ready_at=$(date --iso-8601=seconds)" >> "$output_dir/run-metadata.txt"
+
 if [[ -z "$collection" ]]; then
   collection="ragperf_${run_name//[^A-Za-z0-9_]/_}"
 fi
-
-source "$project_root/.venv/bin/activate"
 python -m milvus_trace.replay \
   --artifact-dir "$artifact_dir" \
   --uri "$uri" \

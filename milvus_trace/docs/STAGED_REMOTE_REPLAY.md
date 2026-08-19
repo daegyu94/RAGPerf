@@ -94,6 +94,18 @@ template도 있습니다. 예시의 host와 `/absolute/path`는 반드시 바꿉
 | `storage_backend`, `expected_fstype` | result label과 mount 검증값 |
 | `replay_milvus_uri` | VM에서 접근할 target Milvus URI |
 
+`lmcache-tracebench`의 `weka01` profile과 같은 jump-user 접속은 다음처럼 지정합니다.
+
+```yaml
+replay_host: weka01
+replay_jump_user: user
+replay_user: daegyu
+replay_port: 22
+```
+
+이 경우 SSH는 `user@weka01`로 접속하고 remote command와 rsync는
+`sudo -n -u daegyu`로 실행합니다.
+
 MinIO object와 Milvus local/index data는 `<replay_diskann_root>/<run-name>`에 두고,
 etcd만 `<replay_meta_root>/<run-name>`에 둡니다. Docker image layer는 Docker root에
 남으므로 measured DISKANN data와 섞이지 않습니다.
@@ -139,6 +151,7 @@ bash milvus_trace/benchmarks/replayer/staged_remote_replay.sh replay \
 ```
 
 `all` phase는 `prepare-trace`, `prepare-replay`, `replay`를 순서대로 실행합니다.
+단일 runner는 TCP port 개방 뒤에도 Milvus client health check가 성공할 때까지 기다립니다.
 `--dry-run`은 SSH/transfer/replay를 수행하지 않고 치환된 명령을 출력합니다.
 
 ## 5. Result와 재실행
