@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run one Milvus DISKANN replay with all Milvus data on a verified mountpoint.
+# Run one Milvus DISKANN replay with all Milvus data on a verified filesystem.
 set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -36,7 +36,7 @@ Required:
   --artifact-dir PATH       Extracted RAGPerf trace artifact.
   --backend NAME            Backend label: xfs, 3fs, or pnfs.
   --expected-fstype LIST    Comma-separated findmnt FSTYPE values.
-  --diskann-root PATH       Exact mounted directory used for Milvus data.
+  --diskann-root PATH       Data directory on the filesystem under test.
   --meta-root PATH          Local directory used only for etcd metadata.
   --output-dir PATH         New per-run result directory.
   --run-name NAME           Unique run label.
@@ -106,16 +106,16 @@ for path_value in "$artifact_dir" "$diskann_root" "$meta_root" "$output_dir"; do
   [[ "$path_value" != / ]] || die "data paths must not be /"
 done
 [[ -d "$artifact_dir" ]] || die "artifact directory not found: $artifact_dir"
-[[ -d "$diskann_root" ]] || die "DiskANN mountpoint not found: $diskann_root"
-[[ ! -L "$diskann_root" ]] || die "DiskANN mountpoint must not be a symlink"
-[[ -w "$diskann_root" ]] || die "DiskANN mountpoint is not writable: $diskann_root"
+[[ -d "$diskann_root" ]] || die "DiskANN data directory not found: $diskann_root"
+[[ ! -L "$diskann_root" ]] || die "DiskANN data directory must not be a symlink"
+[[ -w "$diskann_root" ]] || die "DiskANN data directory is not writable: $diskann_root"
 [[ -f "$compose_file" ]] || die "Compose file not found: $compose_file"
 [[ -x "$project_root/.venv/bin/python" ]] || die "replay venv is missing: $project_root/.venv"
 [[ ! -e "$output_dir" ]] || die "output directory already exists: $output_dir"
 
 command -v findmnt >/dev/null 2>&1 || die "findmnt is required"
-mount_record="$(findmnt -n -M "$diskann_root" -o TARGET,FSTYPE,SOURCE || true)"
-[[ -n "$mount_record" ]] || die "DiskANN root is not an exact mountpoint: $diskann_root"
+mount_record="$(findmnt -n -T "$diskann_root" -o TARGET,FSTYPE,SOURCE || true)"
+[[ -n "$mount_record" ]] || die "DiskANN root does not resolve to a mounted filesystem: $diskann_root"
 read -r mount_target actual_fstype mount_source <<< "$mount_record"
 fstype_matches=false
 IFS=',' read -r -a accepted_fstypes <<< "$expected_fstype"
@@ -178,7 +178,7 @@ trap cleanup EXIT
   echo "timing=$timing"
   echo "time_scale=$time_scale"
   echo "started_at=$(date --iso-8601=seconds)"
-  findmnt -M "$diskann_root"
+  findmnt -T "$diskann_root"
   df -hT "$diskann_root"
 } > "$output_dir/run-metadata.txt"
 

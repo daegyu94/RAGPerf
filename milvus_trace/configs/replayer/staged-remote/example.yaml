@@ -22,9 +22,9 @@ replay_trace_root: /srv/ragperf/traces
 replay_output_root: /srv/ragperf/outputs
 replay_meta_root: /srv/ragperf/milvus-meta
 
-# This must be the exact mountpoint whose backend is under test.
+# Keep this path stable while changing its backing filesystem.
 storage_backend: xfs
-replay_diskann_root: /mnt/diskann-xfs
+replay_diskann_root: /mnt/nvme/milvus-data
 expected_fstype: xfs
 
 # Python is installed from the VM's apt repository. Python packages come only

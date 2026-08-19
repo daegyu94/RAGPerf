@@ -2,7 +2,8 @@
 
 이 문서는 repository root에서 명령을 실행한다고 가정합니다. record에는 RAGPerf의
 dataset, embedding/ASR, generation 의존성이 필요하고 replay에는 Milvus client만
-필요합니다.
+필요합니다. 0.5TB, 1TB처럼 용량을 통제한 synthetic DISKANN dataset은 상세 내용을
+여기에 중복하지 않고 [Vector workload 기록](VECTOR_WORKLOADS.md)에서 설명합니다.
 
 먼저 [Milvus trace 설치](../README.md#1-설치)와 standalone Milvus 서버 준비를
 완료합니다. 처음 테스트에서는 하나의 서버를 record와 replay에 함께 사용하고, source

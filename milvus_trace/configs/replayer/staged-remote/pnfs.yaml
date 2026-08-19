@@ -14,7 +14,7 @@ replay_trace_root: /srv/ragperf/traces
 replay_output_root: /srv/ragperf/outputs/pnfs
 replay_meta_root: /srv/ragperf/milvus-meta/pnfs
 storage_backend: pnfs
-replay_diskann_root: /mnt/diskann-pnfs
+replay_diskann_root: /mnt/nvme/milvus-data
 expected_fstype: nfs4,nfs
 replay_python: /usr/bin/python3
 replay_runtime_requirements: requirements-replay.lock

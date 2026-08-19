@@ -98,6 +98,9 @@ record를 실행한 뒤에는 생성된 collection 이름이 목록에 표시됩
 | Docker 없이 Python으로 replay | Python, replay 의존성, target Milvus | [재생 가이드](docs/REPLAY.md) |
 | 격리된 CPU container에서 replay | Docker, target Milvus | [Docker 가이드](docs/DOCKER.md) |
 | Text/Image/Audio별 완전한 명령 | workload별 model과 config | [workload 예시](docs/WORKLOADS.md) |
+| 0.5TB 이상 capacity artifact | GPU 또는 CPU, 충분한 controller storage | [Vector workload](docs/VECTOR_WORKLOADS.md) |
+| 외부망 없는 VM의 xfs/3FS/pNFS replay | Controller SSH, offline wheels/images, mounted backend | [Staged remote replay](docs/STAGED_REMOTE_REPLAY.md) |
+| 반복 실험 matrix | 준비된 세 topology와 trace archive | [실험 계획](benchmarks/evaluation/README.md) |
 
 아래 명령은 모두 repository root에서 실행한다고 가정합니다.
 

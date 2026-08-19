@@ -14,7 +14,7 @@ replay_trace_root: /srv/ragperf/traces
 replay_output_root: /srv/ragperf/outputs/3fs
 replay_meta_root: /srv/ragperf/milvus-meta/3fs
 storage_backend: 3fs
-replay_diskann_root: /mnt/diskann-3fs
+replay_diskann_root: /mnt/nvme/milvus-data
 expected_fstype: fuse.3fs,fuse3fs,fuse
 replay_python: /usr/bin/python3
 replay_runtime_requirements: requirements-replay.lock

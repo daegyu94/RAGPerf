@@ -316,13 +316,13 @@ transfer_directory() {
 
 retrieve_directory() {
   local remote_path="$1" local_path="$2"
-  if ! remote_path_exists "$remote_path"; then
-    warn "remote result directory does not exist: $remote_path"
-    return 1
-  fi
   if [[ "$dry_run" == true ]]; then
     printf '[DRY-RUN] retrieve %s:%s -> %s\n' "$ssh_target" "$remote_path" "$local_path"
     return
+  fi
+  if ! remote_path_exists "$remote_path"; then
+    warn "remote result directory does not exist: $remote_path"
+    return 1
   fi
   mkdir -p -- "$(dirname -- "$local_path")"
   mkdir -- "$local_path"
@@ -552,7 +552,7 @@ reset_replay_node() {
       runtime) reset_path "$replay_runtime_root" "offline runtime" wipe ;;
       trace) reset_path "$replay_trace_root" "replay trace root" wipe ;;
       output) reset_path "$replay_output_root" "replay output root" wipe ;;
-      diskann) reset_path "$replay_diskann_root" "DiskANN mountpoint contents" clear ;;
+      diskann) reset_path "$replay_diskann_root" "DiskANN data directory contents" clear ;;
     esac
   done
 }

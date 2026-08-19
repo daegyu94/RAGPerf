@@ -1,0 +1,57 @@
+format: ragperf-diskann-experiments-v1
+
+backends:
+  xfs:
+    topology: milvus_trace/configs/replayer/staged-remote/xfs.yaml
+  3fs:
+    topology: milvus_trace/configs/replayer/staged-remote/3fs.yaml
+  pnfs:
+    topology: milvus_trace/configs/replayer/staged-remote/pnfs.yaml
+
+workloads:
+  gpu-smoke:
+    asset: vector/gpu-smoke.tar.zst
+    artifact_path: vector/gpu-smoke
+  0.5tb:
+    asset: vector/0.5tb.tar.zst
+    artifact_path: vector/0.5tb
+  1tb:
+    asset: vector/1tb.tar.zst
+    artifact_path: vector/1tb
+  2tb:
+    asset: vector/2tb.tar.zst
+    artifact_path: vector/2tb
+  4tb:
+    asset: vector/4tb.tar.zst
+    artifact_path: vector/4tb
+
+presets:
+  smoke:
+    description: One functional run on every filesystem backend.
+    workloads: [gpu-smoke]
+    backends: [xfs, 3fs, pnfs]
+    time_scales: [1]
+    repeats: 1
+    warmup: 1
+    max_in_flight: 16
+    bootstrap_batch_size: 128
+
+  capacity:
+    description: Main capacity sweep after calibration and smoke pass.
+    workloads: [0.5tb, 1tb, 2tb, 4tb]
+    backends: [xfs, 3fs, pnfs]
+    time_scales: [1]
+    repeats: 3
+    warmup: 10
+    max_in_flight: 1024
+    bootstrap_batch_size: 4096
+
+  arrival:
+    description: Arrival-rate sensitivity at the two primary dataset sizes.
+    workloads: [0.5tb, 1tb]
+    backends: [xfs, 3fs, pnfs]
+    time_scales: [0.5, 1, 2, 4]
+    repeats: 3
+    warmup: 10
+    max_in_flight: 1024
+    bootstrap_batch_size: 4096
