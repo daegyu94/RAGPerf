@@ -1,0 +1,38 @@
+# Copy this file once per storage backend. All values are top-level scalars so
+# the controller script does not need PyYAML before the runtime is staged.
+
+# Controller paths. The replay node never clones from GitHub or downloads from HF/PyPI.
+controller_repo_root: /absolute/path/to/RAGPerf
+controller_trace_root: /absolute/path/to/ragperf-trace-archives
+controller_runtime_root: /absolute/path/to/ragperf-offline-runtime
+controller_output_root: /absolute/path/to/ragperf-replay-results
+
+# SSH connection to the isolated replay VM.
+replay_host: replay-node.example.com
+replay_user: benchmark
+replay_port: 22
+# replay_jump_user: jump-account
+transfer_method: rsync
+
+# Paths on the replay VM.
+replay_repo_root: /opt/ragperf
+replay_venv_root: /opt/ragperf/.venv
+replay_runtime_root: /opt/ragperf-runtime
+replay_trace_root: /srv/ragperf/traces
+replay_output_root: /srv/ragperf/outputs
+replay_meta_root: /srv/ragperf/milvus-meta
+
+# This must be the exact mountpoint whose backend is under test.
+storage_backend: xfs
+replay_diskann_root: /mnt/diskann-xfs
+expected_fstype: xfs
+
+# Python is installed from the VM's apt repository. Python packages come only
+# from controller_runtime_root/wheelhouse.
+replay_python: /usr/bin/python3
+replay_runtime_requirements: requirements-replay.lock
+
+# Set both values when Milvus runs on the replay VM from pre-staged OCI images.
+replay_require_docker: true
+replay_container_images: milvus-images.tar
+replay_milvus_uri: http://127.0.0.1:19530

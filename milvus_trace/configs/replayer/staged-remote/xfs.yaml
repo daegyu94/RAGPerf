@@ -1,0 +1,23 @@
+# Example XFS topology. Replace every host and absolute path before use.
+controller_repo_root: /absolute/path/to/RAGPerf
+controller_trace_root: /absolute/path/to/ragperf-trace-archives
+controller_runtime_root: /absolute/path/to/ragperf-offline-runtime
+controller_output_root: /absolute/path/to/ragperf-replay-results/xfs
+replay_host: replay-node.example.com
+replay_user: benchmark
+replay_port: 22
+transfer_method: rsync
+replay_repo_root: /opt/ragperf
+replay_venv_root: /opt/ragperf/.venv
+replay_runtime_root: /opt/ragperf-runtime
+replay_trace_root: /srv/ragperf/traces
+replay_output_root: /srv/ragperf/outputs/xfs
+replay_meta_root: /srv/ragperf/milvus-meta/xfs
+storage_backend: xfs
+replay_diskann_root: /mnt/diskann-xfs
+expected_fstype: xfs
+replay_python: /usr/bin/python3
+replay_runtime_requirements: requirements-replay.lock
+replay_require_docker: true
+replay_container_images: milvus-images.tar
+replay_milvus_uri: http://127.0.0.1:19530
