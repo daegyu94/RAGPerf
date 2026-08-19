@@ -1,0 +1,51 @@
+format: ragperf-vector-workload-presets-v1
+
+defaults:
+  dimension: 768
+  dtype_bytes: 4
+  metric_type: COSINE
+  index_type: DISKANN
+  index_params: {}
+  search_list: 100
+  top_k: 10
+  query_count: 10000
+  query_qps: 100
+  batch_size: 4096
+  query_batch_size: 256
+  rows_per_shard: 262144
+  max_queue_bytes: 1073741824
+  producer_delay_ms: 1
+  seed: 20260819
+  query_seed: 20260820
+  device: auto
+
+presets:
+  gpu-smoke:
+    description: Small checked-in trace generated on one CUDA GPU.
+    rows: 256
+    dimension: 32
+    query_count: 8
+    query_qps: 20
+    batch_size: 64
+    query_batch_size: 8
+    rows_per_shard: 128
+    max_queue_bytes: 67108864
+    producer_delay_ms: 0
+    search_list: 32
+    top_k: 5
+
+  0.5tb:
+    description: Strict decimal 0.5 TB logical float32 vector target.
+    target_vector_bytes: 500000000000
+
+  1tb:
+    description: Strict decimal 1 TB logical float32 vector target.
+    target_vector_bytes: 1000000000000
+
+  2tb:
+    description: Strict decimal 2 TB logical float32 vector target.
+    target_vector_bytes: 2000000000000
+
+  4tb:
+    description: Strict decimal 4 TB logical float32 vector target.
+    target_vector_bytes: 4000000000000

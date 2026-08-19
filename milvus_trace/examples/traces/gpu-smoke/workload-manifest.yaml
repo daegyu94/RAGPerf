@@ -1,0 +1,56 @@
+format: ragperf-milvus-trace
+incomplete: false
+incomplete_reason: null
+timing_model: monotonic-open-loop-arrival
+session_id: gpu-smoke-rtx-pro-4000-20260819
+event_count: 8
+operation_counts:
+  insert: 0
+  search: 8
+  query: 0
+rows_per_shard: 128
+compression: zstd
+collection:
+  name: ragperf_gpu_smoke
+  dimension: 32
+  auto_id: true
+  consistency_level: Eventually
+  vector_field: vector
+  workload_preset: gpu-smoke
+  logical_vector_bytes: 32768
+  storage_overhead_factor: 1.0
+  generator: cupy.standard_normal+l2-normalize
+  generator_device: cuda:0
+  generator_device_name: NVIDIA RTX PRO 4000 Blackwell
+  generator_framework: cupy
+  generator_framework_version: 14.1.1
+  corpus_seed: 20260819
+  query_seed: 20260820
+index:
+  field_name: vector
+  metric_type: COSINE
+  index_type: DISKANN
+  index_name: DISKANN_COSINE
+  params: {}
+vector:
+  dimension: 32
+  dtype: float32
+recorder:
+  python: 3.12.3
+artifacts:
+- kind: corpus
+  path: corpus-00000.parquet
+  rows: 128
+  sha256: 3b6ce0d142a971fba4192339512f328348bd653f039ffa6b8842e74a8e1cf0ce
+- kind: corpus
+  path: corpus-00001.parquet
+  rows: 128
+  sha256: 756b3d20496c01421decb5f0a69145036fe9d3f0b1f1274cb5d3ba8137ca62bc
+- kind: searches
+  path: searches-00000.parquet
+  rows: 8
+  sha256: 559b302204b28c0fd9dd4f4554d15accd922b5c57204f729e4e026ca6fd5d5a6
+- kind: events
+  path: events-00000.parquet
+  rows: 8
+  sha256: a839513a166ac293c99576d5a0e6d7dbe749d8edfa070a8b12a8a1b944028b79
