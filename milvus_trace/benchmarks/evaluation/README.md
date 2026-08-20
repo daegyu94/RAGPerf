@@ -4,23 +4,46 @@
 replay하는 실험 matrix와 진행 순서를 정의합니다. Staging과 replay node 준비는
 [Staged remote replay](../../docs/staged_remote_replay.md), workload 생성은
 [Vector workloads](../../docs/vector_workloads.md)를 따릅니다.
-모든 topology는 같은 `/mnt/nvme/milvus-data` data path를 사용하고
-`expected_fstype`만 backend에 맞게 검증합니다.
+각 topology는 `replay_diskann_root`를 기본 경로로 사용합니다. 예제 topology의 기본값은
+`/mnt/nvme/milvus-data`이며, 실행 시 `--diskann-root PATH`로 모든 backend의
+DiskANN mount 경로를 한 번에 덮어쓸 수 있습니다. backend별로 다른 경로가 필요하면
+각 topology 파일의 `replay_diskann_root`를 따로 지정합니다. `expected_fstype`는
+backend에 맞게 검증합니다.
 
 ## Matrix preset
 
 [`diskann-experiments.yaml`](../../configs/evaluation/diskann-experiments.yaml)에 세
 단계가 있습니다.
 
-| Preset | Workload | Time scale | Repeat | 목적 |
-| --- | --- | --- | ---: | --- |
-| `smoke` | checked-in GPU smoke | 1 | 1 | topology, mount, offline runtime, result 회수 |
-| `capacity` | 0.5/1/2/4TB | 1 | 3 | dataset 크기별 index/replay 특성 |
-| `arrival` | 0.5/1TB | 0.5/1/2/4 | 3 | open-loop arrival 민감도 |
+| Preset | Workload | Time scale | 목적 |
+| --- | --- | --- | --- |
+| `smoke` | checked-in GPU smoke | 1 | topology, mount, offline runtime, result 회수 |
+| `capacity` | 0.5/1/2/4TB | 1 | dataset 크기별 index/replay 특성 |
+| `arrival` | 0.5/1TB | 0.5/1/2/4 | open-loop arrival 민감도 |
 
-기본 반복 순서는 workload → backend → time scale → repeat입니다. 따라서 한 workload의
-세 filesystem을 연속 비교한 뒤 다음 크기로 이동합니다. 각 case는 새 run directory와
+반복 순서는 workload → backend → time scale → repeat입니다. Repeat count는 preset에
+저장하지 않으며, 모든 실행에서 `--repeats N`으로 선택합니다. 각 case는 새 run directory와
 새 Milvus data directory를 사용합니다.
+
+## 실행 옵션
+
+Matrix를 실행하기 전에 이번 run에서 사용할 값을 지정합니다. `--repeats`는 필수이며
+preset의 기본값이 없습니다. `--diskann-root`는 생략하면 topology의
+`replay_diskann_root`를 사용하고, 지정하면 모든 backend에 같은 remote mount 경로를
+적용합니다.
+
+```bash
+export REPEATS="${REPEATS:?set REPEATS to a positive integer}"
+export DISKANN_ROOT="${DISKANN_ROOT:-/mnt/nvme/milvus-data}"
+```
+
+주요 선택 옵션은 다음과 같습니다.
+
+- `--preset smoke|capacity|arrival`: matrix 모양을 선택합니다.
+- `--repeats N`: 이 실행의 반복 횟수를 선택합니다.
+- `--diskann-root PATH`: 모든 topology의 DiskANN mount 경로를 덮어씁니다.
+- `--topology NAME=PATH`: backend별 topology 파일을 교체합니다. 반복 지정할 수 있습니다.
+- `--workloads`, `--backends`, `--time-scales`: preset의 부분집합을 선택합니다.
 
 ## 0. 사전 용량 계산
 
@@ -44,6 +67,8 @@ python -m milvus_trace.benchmarks.recorder.record_vector_workload \
 bash milvus_trace/benchmarks/evaluation/run_diskann_experiments.sh \
   --preset smoke \
   --run-tag smoke-20260819 \
+  --repeats "$REPEATS" \
+  --diskann-root "$DISKANN_ROOT" \
   --skip-prepare \
   --dry-run
 ```
@@ -56,6 +81,8 @@ replay를 실행합니다. Topology 파일을 repository 밖에서 관리한다�
 bash milvus_trace/benchmarks/evaluation/run_diskann_experiments.sh \
   --preset smoke \
   --run-tag smoke-20260819 \
+  --repeats "$REPEATS" \
+  --diskann-root "$DISKANN_ROOT" \
   --topology xfs=/secure/topologies/xfs.yaml \
   --topology 3fs=/secure/topologies/3fs.yaml \
   --topology pnfs=/secure/topologies/pnfs.yaml
@@ -85,15 +112,18 @@ vector/
 bash milvus_trace/benchmarks/evaluation/run_diskann_experiments.sh \
   --preset capacity \
   --workloads 0.5tb \
-  --repeats 1 \
+  --repeats "$REPEATS" \
+  --diskann-root "$DISKANN_ROOT" \
   --run-tag capacity-preflight-20260819
 ```
 
-성공한 뒤 full capacity matrix를 3회 반복합니다.
+preflight 결과가 안정되면 원하는 반복 횟수로 full capacity matrix를 실행합니다.
 
 ```bash
 bash milvus_trace/benchmarks/evaluation/run_diskann_experiments.sh \
   --preset capacity \
+  --repeats "$REPEATS" \
+  --diskann-root "$DISKANN_ROOT" \
   --run-tag capacity-20260819
 ```
 
@@ -107,24 +137,18 @@ Capacity 결과가 안정된 뒤 같은 0.5TB/1TB artifact에 time scale만 바�
 ```bash
 bash milvus_trace/benchmarks/evaluation/run_diskann_experiments.sh \
   --preset arrival \
+  --repeats "$REPEATS" \
+  --diskann-root "$DISKANN_ROOT" \
   --run-tag arrival-20260819
 ```
 
 `time_scale=2`는 recorded query offset을 절반으로 줄입니다. Model/GPU compute를 더 빠른
 system처럼 재현한다는 의미는 아니며 storage request arrival만 바뀝니다.
 
-## 비교 통제 항목
+## 결과 기록
 
-- 모든 backend에서 archive SHA-256과 manifest SHA-256이 동일해야 합니다.
-- 동일한 Milvus/client version, CPU/memory limit, index/search parameter를 사용합니다.
-- `replay_meta_root`는 같은 local storage class에 두고 DISKANN mount와 분리합니다.
-- 각 case는 새 run directory를 사용하고 Compose를 내린 뒤 다음 case를 시작합니다.
-- Script는 host page cache를 drop하지 않습니다. cold/warm cache 정책은 사전에 정하고
-  세 backend에 같은 운영 절차를 적용합니다.
-- 3FS/pNFS의 node 수, replication, stripe, mount option과 network link를 결과에 남깁니다.
-- 실패 case는 정상 표본에 포함하지 않고 `remote_exit_code`, Milvus failure log,
-  scheduler lag와 request failures를 함께 확인합니다.
-
-Primary metric과 bootstrap/timed replay 경계는 기존
-[Benchmark 방법론](../../docs/benchmark_methodology.md)을 그대로 사용합니다. 추가로
-`run-metadata.txt`의 mount identity와 disk byte를 case metadata와 함께 보관합니다.
+각 case의 matrix plan, command, remote exit code와 replay 결과는 runner의 state root와
+topology의 `controller_output_root`에 저장합니다. 성공한 case만 결과 비교에 사용하고,
+실패한 case는 원인과 함께 별도로 남깁니다. Primary metric과 bootstrap/timed replay
+경계는 [Benchmark 방법론](../../docs/benchmark_methodology.md)을 따릅니다.
+`run-metadata.txt`에는 선택한 mount path와 filesystem identity를 보관합니다.

@@ -14,11 +14,13 @@ from milvus_trace.benchmarks.evaluation.run_diskann_experiments import (
 
 def test_smoke_matrix_covers_every_backend(tmp_path: Path) -> None:
     payload = load_config(DEFAULT_CONFIG)
+    assert all("repeats" not in preset for preset in payload["presets"].values())
     cases = build_cases(
         payload,
         "smoke",
         run_tag="unit",
         state_root=tmp_path,
+        repeats_override=1,
     )
 
     assert len(cases) == 3
@@ -53,14 +55,50 @@ def test_remote_command_uses_only_topology_placeholders(tmp_path: Path) -> None:
         run_tag="unit",
         state_root=tmp_path,
         backends_override=["xfs"],
+        repeats_override=1,
     )[0]
-    command = case_command(case, overwrite_output=False, dry_run=True)
+    command = case_command(
+        case, diskann_root=None, overwrite_output=False, dry_run=True
+    )
 
     assert "@DISKANN_ROOT@" in command
     assert "@EXPECTED_FSTYPE@" in command
     assert "@TRACE_ROOT@/vector/gpu-smoke" in command
     assert "@OUTPUT_ROOT@" in command
     assert "--dry-run" in command
+
+
+def test_repeat_count_must_be_provided(tmp_path: Path) -> None:
+    with pytest.raises(MatrixConfigError, match="--repeats is required"):
+        build_cases(
+            load_config(DEFAULT_CONFIG),
+            "smoke",
+            run_tag="unit",
+            state_root=tmp_path,
+        )
+
+
+def test_remote_command_can_override_diskann_root(tmp_path: Path) -> None:
+    case = build_cases(
+        load_config(DEFAULT_CONFIG),
+        "smoke",
+        run_tag="unit",
+        state_root=tmp_path,
+        backends_override=["xfs"],
+        repeats_override=1,
+    )[0]
+    command = case_command(
+        case,
+        diskann_root="/mnt/nvme/custom",
+        overwrite_output=False,
+        dry_run=False,
+    )
+
+    separator = command.index("--")
+    assert command[separator - 2 : separator] == [
+        "--diskann-root",
+        "/mnt/nvme/custom",
+    ]
 
 
 def test_unknown_workload_is_rejected(tmp_path: Path) -> None:
@@ -71,6 +109,7 @@ def test_unknown_workload_is_rejected(tmp_path: Path) -> None:
             run_tag="unit",
             state_root=tmp_path,
             workloads_override=["missing"],
+            repeats_override=1,
         )
 
 

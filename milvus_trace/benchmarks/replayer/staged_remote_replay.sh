@@ -11,6 +11,7 @@ phase=""
 dry_run=false
 overwrite_output=false
 run_name=""
+diskann_root_override=""
 assets=()
 reset_targets=()
 command_args=()
@@ -34,6 +35,7 @@ Options:
   --topology PATH      Required flat-scalar topology YAML.
   --asset PATH         Path relative to controller_trace_root. Repeatable.
   --run-name NAME      Required for replay/all.
+  --diskann-root PATH  Override topology replay_diskann_root for this run.
   --target NAME        reset target: repo, runtime, trace, output, diskann, or all.
   --overwrite-output   Replace only this run-name's remote/controller output.
   --dry-run            Print commands without executing SSH or transfers.
@@ -104,6 +106,11 @@ while (($#)); do
       run_name="$2"
       shift 2
       ;;
+    --diskann-root)
+      require_value "$@"
+      diskann_root_override="$2"
+      shift 2
+      ;;
     --overwrite-output)
       overwrite_output=true
       shift
@@ -166,7 +173,7 @@ for key in \
   controller_repo_root controller_trace_root controller_runtime_root \
   controller_output_root replay_host replay_user replay_port replay_repo_root \
   replay_venv_root replay_runtime_root replay_trace_root replay_output_root \
-  replay_diskann_root replay_meta_root replay_python replay_runtime_requirements \
+  replay_meta_root replay_python replay_runtime_requirements \
   replay_milvus_uri storage_backend expected_fstype transfer_method; do
   require_topology_key "$key"
 done
@@ -184,7 +191,11 @@ replay_venv_root="$(topology_get replay_venv_root)"
 replay_runtime_root="$(topology_get replay_runtime_root)"
 replay_trace_root="$(topology_get replay_trace_root)"
 replay_output_root="$(topology_get replay_output_root)"
-replay_diskann_root="$(topology_get replay_diskann_root)"
+replay_diskann_root="$(topology_get replay_diskann_root || true)"
+if [[ -n "$diskann_root_override" ]]; then
+  replay_diskann_root="$diskann_root_override"
+fi
+[[ -n "$replay_diskann_root" ]] || die "replay_diskann_root or --diskann-root is required"
 replay_meta_root="$(topology_get replay_meta_root)"
 replay_python="$(topology_get replay_python)"
 replay_runtime_requirements="$(topology_get replay_runtime_requirements)"

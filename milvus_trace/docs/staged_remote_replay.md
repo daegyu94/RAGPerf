@@ -19,13 +19,14 @@ trace.tar.zst ───────────────┐          ┌─ a
 wheelhouse + OCI images ─────┼─ SSH ───>├─ pip --no-index / docker load
 milvus_trace source ─────────┘          ├─ target Milvus + replayer
 retrieved results <─────────────────────┤
-                                       └─ /mnt/nvme/milvus-data
+                                       └─ topology replay_diskann_root (예: /mnt/nvme/milvus-data)
 ```
 
 B300 cluster에서 사용할 때의 역할은 다음과 같습니다. `weka01`은 controller가 SSH/rsync로
 접속하는 replay node이고, `weka02`부터 `weka07`은 storage cluster node입니다.
-`xfs`는 `weka01`의 local path를 baseline으로 사용하고, `3FS`와 `pNFS`는 같은
-`/mnt/nvme/milvus-data` mount path를 통해 storage cluster에 접근합니다.
+`xfs`는 `weka01`의 local path를 baseline으로 사용하고, `3FS`와 `pNFS`는 topology에
+지정한 mount path를 통해 storage cluster에 접근합니다. 예제 topology의 기본 path는
+`/mnt/nvme/milvus-data`입니다.
 
 ```text
 controller node (외부 인터넷)
@@ -61,11 +62,14 @@ sudo apt-get install -y \
 성공해야 하며 replay account는 Docker daemon과 DISKANN data directory에 접근할 수 있어야
 합니다. Python package나 container image를 replay node에서 내려받지 않습니다.
 
-XFS, 3FS, pNFS 실험은 모두 `/mnt/nvme/milvus-data`를 DISKANN data path로
-사용합니다. Backend를 바꿀 때는 이 경로를 받치는 filesystem을 바꾸고, script는
-`findmnt -T`로 해당 경로의 실제 mount target, source, FSTYPE을 검사합니다.
+XFS, 3FS, pNFS 실험은 topology의 `replay_diskann_root`를 DISKANN data path로
+사용합니다. 예제 topology는 `/mnt/nvme/milvus-data`를 지정하지만, 실행 시
+`--diskann-root PATH`로 모든 backend에 적용할 경로를 덮어쓸 수 있습니다. Backend를
+바꿀 때 script는 선택한 경로를 `findmnt -T`로 검사해 실제 mount target, source,
+FSTYPE을 기록합니다.
 
 ```text
+# 예제 topology의 기본 경로
 /mnt/nvme/milvus-data -> xfs
 /mnt/nvme/milvus-data -> fuse.3fs (환경에 따라 fuse3fs/fuse)
 /mnt/nvme/milvus-data -> nfs4 또는 nfs
@@ -121,7 +125,7 @@ template도 있습니다. 예시의 host와 `/absolute/path`는 반드시 바꿉
 | `replay_repo_root`, `replay_venv_root` | staged source와 offline venv |
 | `replay_trace_root`, `replay_output_root` | 추출 trace와 remote result |
 | `replay_meta_root` | etcd metadata용 local node storage |
-| `replay_diskann_root` | 실험 대상 filesystem 위의 DISKANN data directory |
+| `replay_diskann_root` | 실험 대상 filesystem 위의 DISKANN data directory. `--diskann-root PATH`로 한 실행의 값을 덮어쓸 수 있음 |
 | `storage_backend`, `expected_fstype` | result label과 mount 검증값 |
 | `replay_milvus_uri` | node에서 접근할 target Milvus URI. 표준 값은 `http://127.0.0.1:19530` |
 
@@ -172,11 +176,13 @@ bash milvus_trace/benchmarks/replayer/staged_remote_replay.sh \
   --topology milvus_trace/configs/replayer/staged-remote/xfs.yaml
 ```
 
-단일 replay는 topology placeholder로만 path를 전달합니다.
+단일 replay는 topology placeholder로 path를 전달합니다. 필요하면 `--diskann-root PATH`를
+추가해 해당 run의 DISKANN mount를 덮어씁니다.
 
 ```bash
 bash milvus_trace/benchmarks/replayer/staged_remote_replay.sh replay \
   --topology milvus_trace/configs/replayer/staged-remote/xfs.yaml \
+  --diskann-root /mnt/nvme/milvus-data \
   --run-name gpu-smoke-xfs-r1 -- \
   bash @REPO_ROOT@/milvus_trace/benchmarks/replayer/run_diskann_replay.sh \
     --artifact-dir @TRACE_ROOT@/vector/gpu-smoke \
@@ -217,9 +223,9 @@ Remote command의 성공/실패와 무관하게 output을 controller로 회수�
 의도적으로 재실행할 때만 `--overwrite-output`을 지정하면 그 run directory만
 교체합니다.
 
-`reset`은 controller를 건드리지 않습니다. `diskann` target은
-`/mnt/nvme/milvus-data` directory 자체를 삭제하지 않고 `find -xdev`로 내용만
-지웁니다. 실제 topology를 검토하고 dry-run한 뒤 benchmark 전용 directory에서만
+`reset`은 controller를 건드리지 않습니다. `diskann` target은 선택한
+`replay_diskann_root` directory 자체를 삭제하지 않고 `find -xdev`로 내용만 지웁니다.
+필요하면 reset에도 `--diskann-root PATH`를 지정합니다. 실제 topology를 검토하고 dry-run한 뒤 benchmark 전용 directory에서만
 사용합니다.
 
 ```bash

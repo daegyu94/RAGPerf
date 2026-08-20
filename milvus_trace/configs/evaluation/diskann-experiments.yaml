@@ -31,7 +31,6 @@ presets:
     workloads: [gpu-smoke]
     backends: [xfs, 3fs, pnfs]
     time_scales: [1]
-    repeats: 1
     warmup: 1
     max_in_flight: 16
     bootstrap_batch_size: 128
@@ -41,7 +40,6 @@ presets:
     workloads: [0.5tb, 1tb, 2tb, 4tb]
     backends: [xfs, 3fs, pnfs]
     time_scales: [1]
-    repeats: 3
     warmup: 10
     max_in_flight: 1024
     bootstrap_batch_size: 4096
@@ -51,7 +49,6 @@ presets:
     workloads: [0.5tb, 1tb]
     backends: [xfs, 3fs, pnfs]
     time_scales: [0.5, 1, 2, 4]
-    repeats: 3
     warmup: 10
     max_in_flight: 1024
     bootstrap_batch_size: 4096

@@ -119,6 +119,17 @@ def resolve_path(raw: str) -> Path:
     return path.resolve()
 
 
+def parse_remote_path(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    value = raw.strip()
+    if not value or not value.startswith("/") or value == "/":
+        raise MatrixConfigError("--diskann-root must be a non-root absolute path")
+    if any(character in value for character in ("\n", "|", "&")):
+        raise MatrixConfigError("--diskann-root contains unsupported shell characters")
+    return value
+
+
 def build_cases(
     payload: dict[str, Any],
     preset_name: str,
@@ -142,7 +153,11 @@ def build_cases(
     scales = scales_override or [
         float(value) for value in preset.get("time_scales") or []
     ]
-    repeats = repeats_override or int(preset.get("repeats", 0))
+    if repeats_override is None:
+        raise MatrixConfigError(
+            "--repeats is required; choose the repeat count for this run"
+        )
+    repeats = repeats_override
     if not workloads or not backends or not scales or repeats <= 0:
         raise MatrixConfigError(
             "matrix workloads, backends, scales, and repeats are required"
@@ -224,7 +239,13 @@ def write_yaml(path: Path, payload: Any) -> None:
     temporary.replace(path)
 
 
-def case_command(case: Case, *, overwrite_output: bool, dry_run: bool) -> list[str]:
+def case_command(
+    case: Case,
+    *,
+    diskann_root: str | None,
+    overwrite_output: bool,
+    dry_run: bool,
+) -> list[str]:
     command = [
         "bash",
         str(STAGED_SCRIPT),
@@ -238,6 +259,8 @@ def case_command(case: Case, *, overwrite_output: bool, dry_run: bool) -> list[s
         command.append("--overwrite-output")
     if dry_run:
         command.append("--dry-run")
+    if diskann_root is not None:
+        command.extend(("--diskann-root", diskann_root))
     command.extend(
         [
             "--",
@@ -288,6 +311,8 @@ def run_matrix(args: argparse.Namespace, cases: list[Case], state_root: Path) ->
         "format": "ragperf-diskann-matrix-plan-v1",
         "preset": args.preset,
         "run_tag": args.run_tag,
+        "repeats": args.repeats,
+        "diskann_root": args.diskann_root,
         "dry_run": args.dry_run,
         "case_count": len(cases),
         "cases": [case.as_dict() for case in cases],
@@ -336,6 +361,7 @@ def run_matrix(args: argparse.Namespace, cases: list[Case], state_root: Path) ->
         ).isoformat()
         command = case_command(
             case,
+            diskann_root=args.diskann_root,
             overwrite_output=args.overwrite_output,
             dry_run=args.dry_run,
         )
@@ -368,6 +394,8 @@ def run_matrix(args: argparse.Namespace, cases: list[Case], state_root: Path) ->
             "format": "ragperf-diskann-matrix-summary-v1",
             "preset": args.preset,
             "run_tag": args.run_tag,
+            "repeats": args.repeats,
+            "diskann_root": args.diskann_root,
             "case_count": len(cases),
             "failures": failures,
             "status": (
@@ -388,7 +416,12 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--workloads")
     result.add_argument("--backends")
     result.add_argument("--time-scales")
-    result.add_argument("--repeats", type=int)
+    result.add_argument("--repeats", type=int, required=True)
+    result.add_argument(
+        "--diskann-root",
+        metavar="PATH",
+        help="override replay_diskann_root for every topology",
+    )
     result.add_argument("--skip-prepare", action="store_true")
     result.add_argument("--overwrite-output", action="store_true")
     result.add_argument("--dry-run", action="store_true")
@@ -397,8 +430,9 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
-    if args.repeats is not None and args.repeats <= 0:
+    if args.repeats <= 0:
         raise MatrixConfigError("--repeats must be positive")
+    args.diskann_root = parse_remote_path(args.diskann_root)
     args.run_tag = args.run_tag or datetime_module.datetime.now().strftime(
         "%Y%m%d-%H%M%S"
     )
