@@ -86,27 +86,38 @@ client host가 목표 arrival를 만들지 못했을 수 있습니다.
 `operation_counts`는 성공 완료 수가 아니라 제출 수입니다. `failures`가 있으면 process가
 실패하므로 성공한 run의 throughput/percentile과 직접 비교하지 않습니다.
 
-## Streaming과 memory
+## 데이터를 한꺼번에 메모리에 올리지 않는 방식
 
-Record와 replay는 전체 dataset, event, latency sample을 하나의 Python list에 모으지
-않습니다.
+Record와 replay는 전체 dataset, 요청(event), latency sample을 하나의 Python list에
+쌓아두지 않습니다. 대신 정해진 크기의 작은 단위로 읽고 쓰면서 처리합니다.
 
-- Recorder는 byte 상한이 있는 queue와 row 상한이 있는 Parquet shard를 사용합니다.
-- Replayer는 event를 batch iterator로 읽고 payload shard를 하나씩 cache합니다.
-- Latency는 개별 sample 대신 bounded logarithmic histogram에 집계합니다.
-- Timed concurrency는 `max-in-flight`로 제한합니다.
+- Record: 요청은 `max_queue_bytes`까지 담을 수 있는 임시 대기열(queue)에 보관하고,
+  payload는 `rows_per_shard` 행 단위의 Parquet 파일로 나눠 저장합니다.
+- Replay: 요청 기록(event)은 batch 단위로 읽고, payload는 한 번에 하나의 Parquet
+  shard만 메모리에 올려 처리합니다.
+- Latency: latency sample을 전부 저장하지 않고, latency 구간별 개수(histogram)로
+  요약합니다.
+- 동시성: 동시에 처리 중인 request 수는 `max-in-flight`를 넘지 않습니다.
 
-이 설계는 artifact 크기와 무관한 순차 처리를 목표로 합니다. RSS를 고정된 정확한
-상한으로 보장한다는 의미는 아니며, 현재 payload reader는 한 Parquet shard를 memory에
-load하므로 `rows_per_shard`, vector dimension과 scalar 크기가 peak memory에 영향을
-줍니다.
+따라서 artifact 전체가 커져도 그 크기만큼 RAM을 계속 사용하는 구조는 아닙니다. 다만
+프로세스가 실제로 사용하는 메모리(RSS)가 정확히 일정한 상한 이하로 고정된다는 보장은
+없습니다. 현재 replay reader는 Parquet shard 하나를 메모리에 올리므로 peak memory는
+`rows_per_shard`, vector dimension, scalar metadata 크기에 따라 달라집니다. Record
+queue와 replay 동시 요청 수도 각각 `max_queue_bytes`와 `max-in-flight`의 영향을
+받습니다.
 
 ## 재현 가능한 비교를 위한 체크리스트
 
-- 같은 artifact와 checksum identity를 사용합니다.
-- Target마다 새 collection을 만들고 이전 run의 cache/collection 상태를 기록합니다.
-- Milvus server/client version, index type/parameter와 hardware 구성을 남깁니다.
-- `timing`, `time_scale`, `max-in-flight`, `bootstrap-batch-size`, `warmup`을 함께
-  기록합니다.
-- Result의 scheduler lag, maximum in-flight, failures를 latency와 함께 보고합니다.
-- Replay host의 network path와 CPU/memory resource도 비교 실험에서 동일하게 유지합니다.
+성능을 비교할 때는 다음 조건과 결과를 함께 기록합니다.
+
+1. 같은 artifact와 checksum을 사용합니다.
+2. Target마다 새 collection을 만들고, 이전 run의 collection과 cache 상태를 기록합니다.
+3. Milvus server/client version, index type/parameter, hardware 구성을 남깁니다.
+4. `timing`, `time_scale`, `max-in-flight`, `bootstrap-batch-size`, `warmup`을
+   함께 기록합니다.
+5. latency와 함께 result의 scheduler lag, maximum in-flight, failures를 보고합니다.
+6. Replay를 container에서 실행한다면 network mode와 replay host의 CPU/memory resource도
+   동일하게 유지합니다.
+
+이 정보를 남겨야 latency 차이가 Milvus 자체 때문인지 replay host와 실행 조건 때문인지
+구분할 수 있습니다.

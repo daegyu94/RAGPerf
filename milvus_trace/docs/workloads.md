@@ -175,7 +175,6 @@ python -m milvus_trace.replay \
   --result-file "$MNTPNT/results/audio.json"
 ```
 
-
 ## 크기와 부하 조절
 
 | 목적 | Text/Image | Audio | Replay |
