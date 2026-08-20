@@ -224,7 +224,22 @@ class TraceRecorder:
         )
         self.clock_ns = clock_ns
         self.session_id = session_id or f"pid-{os.getpid()}"
-        self.root = Path(self.config.output_dir)
+        self.root = Path(self.config.output_dir).expanduser()
+        if self.root.is_symlink():
+            raise FileExistsError(
+                f"trace artifact output path is a symlink: {self.root}"
+            )
+        if self.root.exists():
+            if not self.root.is_dir():
+                raise FileExistsError(
+                    "trace artifact output path exists and is not a directory: "
+                    f"{self.root}"
+                )
+            if any(self.root.iterdir()):
+                raise FileExistsError(
+                    "trace artifact output directory is not empty: "
+                    f"{self.root}; choose a new run path"
+                )
         self.root.mkdir(parents=True, exist_ok=True)
         self.queue = _ByteQueue(self.config.max_queue_bytes)
         self.lock = threading.Lock()

@@ -1,8 +1,8 @@
 # 재생(Replay)
 
-Replayer는 artifact의 bootstrap corpus와 timed Milvus 요청을 하나의 새 target
-collection에 재생합니다. Text, Image, Audio 모두 같은 CLI를 사용하며 record host의
-dataset, model, GPU는 필요하지 않습니다.
+Replayer는 [trace artifact](ARTIFACT_FORMAT.md#용어)의 bootstrap corpus와 timed Milvus
+요청을 하나의 새 target collection에 재생합니다. Text, Image, Audio 모두 같은 CLI를 사용하며
+record host의 dataset, model, GPU는 필요하지 않습니다.
 
 처음 실행한다면 [빠른 시작](../README.md#4-artifact-재생)의 한 번짜리 replay를 먼저
 완료한 뒤 이 문서에서 timing과 concurrency 옵션을 조정하는 순서를 권장합니다.

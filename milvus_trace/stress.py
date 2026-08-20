@@ -26,9 +26,6 @@ def vector(row: int, dimension: int) -> list[float]:
 
 def record(args: argparse.Namespace) -> dict:
     artifact_dir = args.artifact_dir.resolve()
-    if artifact_dir.exists() and any(artifact_dir.iterdir()):
-        raise ValueError(f"artifact directory is not empty: {artifact_dir}")
-    artifact_dir.mkdir(parents=True, exist_ok=True)
     recorder = TraceRecorder(
         TraceConfig(
             enabled=True,

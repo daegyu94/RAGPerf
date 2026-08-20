@@ -1,8 +1,19 @@
 # Artifact 형식
 
-Milvus trace artifact는 하나의 directory입니다. Replayer는 directory 안의
-`workload-manifest.yaml`에서 `format: ragperf-milvus-trace`를 확인한 뒤 checksum과
-Parquet metadata를 검증합니다.
+Milvus trace artifact는 한 번의 record run이 만든 self-contained directory bundle입니다.
+이 문서에서 `artifact`는 이 trace artifact를 줄여 부르는 말이며, `.tar.zst`는 artifact를
+전달하기 위한 archive입니다. Replayer는 directory 안의 `workload-manifest.yaml`에서
+`format: ragperf-milvus-trace`를 확인한 뒤 checksum과 Parquet metadata를 검증합니다.
+
+## 용어
+
+| 용어 | 의미 |
+| --- | --- |
+| `trace` | Record session에서 발생한 Milvus 요청의 논리적 기록. bootstrap corpus와 timed event를 함께 포함합니다. |
+| `trace artifact` | 한 번의 record 결과를 replay할 수 있도록 manifest, checksum, Parquet payload를 묶은 directory입니다. 문서에서 `artifact`라고 줄여 부르기도 합니다. |
+| `bootstrap corpus` | Index 생성과 timed marker 이전에 source collection에 insert한 vector/scalar row입니다. Replay target의 초기 collection을 구성하는 데 사용하며 timed event 도착 간격에는 포함하지 않습니다. |
+| `timed event` | Timed marker 이후의 search, query, timed insert 요청과 recorded relative offset입니다. |
+| `artifact archive` | Trace artifact directory를 전달하기 위해 `tar.zst`로 패키징한 파일입니다. |
 
 현재 형식에는 별도 schema version이 없습니다. Reader와 writer는 repository의 같은
 format contract를 사용해야 하며, 호환되지 않는 변경에는 새로운 format identifier가

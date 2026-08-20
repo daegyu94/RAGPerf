@@ -2,7 +2,10 @@
 
 `milvus_trace`는 RAGPerf가 Milvus에 보내는 `insert`, `search`, `query` 요청을
 artifact로 기록하고, 같은 payload와 도착 간격을 다른 Milvus endpoint에 재생합니다.
-Text, Image, Audio workload가 같은 artifact 형식과 replayer를 사용합니다.
+Text, Image, Audio workload가 같은 artifact 형식과 replayer를 사용합니다. 여기서 `trace`는
+record session의 논리적 Milvus 요청 기록이고, `trace artifact`는 이를 replay할 수 있도록
+manifest, checksum, Parquet payload를 묶은 directory bundle입니다. 상세 용어는
+[artifact 형식](docs/ARTIFACT_FORMAT.md#용어)을 참조합니다.
 
 ```text
 Record host                                      Replay host
@@ -408,8 +411,10 @@ mkdir -p "$MNTPNT/artifacts" "$MNTPNT/results"
 
 실행 전 [`config/milvus_trace_text.yaml`](../config/milvus_trace_text.yaml)의
 `sys.vector_db.collection_name`을 이번 run 전용 이름으로 바꿉니다. 예를 들어
-`ragperf_trace_text_run_001`을 사용합니다. Artifact directory와 source collection을
-이전 run과 공유하지 마십시오. Recorder는 기존 경로를 자동으로 비우지 않습니다.
+`ragperf_trace_text_run_001`을 사용합니다. Trace artifact directory와 source collection을
+이전 run과 공유하지 마십시오. Recorder는 기존 파일이 있는 artifact directory를 거부하며,
+자동으로 비우거나 덮어쓰지 않습니다. 용어 정의는
+[artifact 형식](docs/ARTIFACT_FORMAT.md#용어)을 참조합니다.
 
 ```bash
 python src/run_new.py \

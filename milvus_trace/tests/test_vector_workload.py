@@ -1,7 +1,10 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from milvus_trace.artifact import iter_manifest_rows, verify_artifact
+from milvus_trace.recorder import TraceConfig, TraceRecorder
 from milvus_trace.benchmarks.recorder.record_vector_workload import (
     DEFAULT_CONFIG,
     load_plan,
@@ -23,6 +26,17 @@ def test_storage_overhead_factor_reduces_logical_rows() -> None:
 
     assert plan.logical_vector_bytes <= 800_000_000_000
     assert plan.estimated_disk_bytes <= 1_000_000_000_000
+
+
+def test_recorder_rejects_existing_trace_artifact(tmp_path: Path) -> None:
+    artifact_dir = tmp_path / "existing-trace"
+    artifact_dir.mkdir()
+    (artifact_dir / "old-shard.parquet").write_bytes(b"old")
+
+    with pytest.raises(
+        FileExistsError, match="trace artifact output directory is not empty"
+    ):
+        TraceRecorder(TraceConfig(enabled=True, output_dir=str(artifact_dir)))
 
 
 def test_small_cpu_workload_records_diskann_corpus_and_timed_queries(

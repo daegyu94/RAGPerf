@@ -57,7 +57,8 @@ GPU가 필요할 수 있습니다.
 원래 도착 시각을 가진 event가 됩니다.
 
 Record 전에 config의 `sys.vector_db.collection_name`을 이번 run만의 source collection
-이름으로 바꿉니다. 예시의 artifact directory도 존재하지 않거나 비어 있어야 합니다.
+이름으로 바꿉니다. 예시의 trace artifact directory도 존재하지 않거나 비어 있어야 합니다.
+Recorder는 기존 파일이 있는 경로를 거부하므로 run마다 새 경로를 사용합니다.
 Replayer의 `--collection` 역시 매 실행마다 새 target 이름을 사용합니다. 자세한 이유는
 [기록 가이드](RECORD.md#run마다-새로-정할-값)를 참조합니다.
 

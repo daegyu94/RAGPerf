@@ -272,9 +272,6 @@ def record_artifact(
     session_id: str,
 ) -> dict[str, Any]:
     artifact_dir = artifact_dir.resolve()
-    if artifact_dir.exists() and any(artifact_dir.iterdir()):
-        raise FileExistsError(f"artifact directory is not empty: {artifact_dir}")
-    artifact_dir.mkdir(parents=True, exist_ok=True)
     runtime = resolve_runtime(plan.device)
     started = time.monotonic_ns()
     recorder = TraceRecorder(

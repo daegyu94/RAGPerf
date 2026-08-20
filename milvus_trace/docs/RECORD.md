@@ -28,13 +28,14 @@ export PYTHONPATH="$PWD:$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
 
 다음 두 대상은 이전 run과 공유하지 않습니다.
 
-1. `trace.output_dir`: 존재하지 않거나 비어 있는 directory
+1. `trace.output_dir`: 이번 record의 trace artifact directory입니다. 존재하지 않거나 비어
+   있어야 합니다.
 2. `sys.vector_db.collection_name`: source Milvus에 아직 존재하지 않는 collection
 
-Recorder는 기존 artifact directory를 검사하거나 정리하지 않습니다. 같은 경로를 다시
-사용하면 shard와 manifest 일부를 덮어쓰거나 이전 파일을 남길 수 있습니다. 기존 source
-collection을 재사용하면 collection 생성 metadata가 record되지 않아 replay가 vector
-dimension을 찾지 못할 수 있습니다.
+Recorder는 output directory에 파일이 하나라도 있으면 `FileExistsError`로 시작을 거부하며,
+기존 artifact를 삭제하거나 덮어쓰지 않습니다. Record가 실패해 partial artifact가 남은
+경우에도 같은 경로를 재사용하지 말고 새 run path를 선택합니다. `trace`, `trace artifact`,
+`bootstrap corpus`의 정의는 [artifact 형식](ARTIFACT_FORMAT.md#용어)을 참조합니다.
 
 예시 config의 collection 이름을 `ragperf_trace_text_run_001`처럼 run별로 바꾸고,
 `MNTPNT`도 run 전용 경로로 지정하면 실수를 줄일 수 있습니다.

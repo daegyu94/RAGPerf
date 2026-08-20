@@ -19,7 +19,7 @@ Audio record에는 `torchcodec`가 필요합니다. `config/milvus_audio_smoke.y
 
 처음 실행하기 전에 [record host 설치](../README.md#record-host)를 완료합니다. Config의
 `sys.vector_db.collection_name`과 `trace.output_dir`은 이전 run에서 사용하지 않은 값을
-선택합니다.
+선택합니다. `trace.output_dir`은 이번 run의 trace artifact directory입니다.
 
 ```bash
 export MNTPNT=/path/to/ragperf-data
