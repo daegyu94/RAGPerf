@@ -13,6 +13,9 @@ record host의 dataset, model, GPU는 필요하지 않습니다.
   일치하는지 확인합니다.
 - Target Milvus는 이미 실행 중이어야 합니다. Replayer는 client만 제공하며 server를 설치하거나
   시작하지 않습니다. 처음에는 record와 replay에 같은 standalone endpoint를 사용해도 됩니다.
+- Staged remote replay의 표준 경로에서는 target을 replay VM의 Docker Compose standalone
+  Milvus로 준비합니다. `prepare-replay`가 pre-staged image를 load하고, replay phase의
+  runner가 server를 시작해 health check를 통과한 뒤 Python replayer를 실행합니다.
 - Target에 collection/index 생성, insert, flush, load, search/query 권한이 있고 recorded vector
   dimension, metric, index type을 지원하는지 확인합니다. `--collection`은 아직 존재하지 않는
   새 이름이어야 합니다.

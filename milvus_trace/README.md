@@ -127,7 +127,7 @@ record를 실행한 뒤에는 생성된 collection 이름이 목록에 표시됩
 | 목적 | 필요한 환경 | 시작 문서 |
 | --- | --- | --- |
 | Record host: 실제 RAG workload 기록 | RAGPerf 전체 의존성, dataset/model, source Milvus | [기록 가이드](docs/record.md) |
-| Replay host: Docker 없이 Python으로 replay | Python, replay 의존성, target Milvus | [재생 가이드](docs/replay.md) |
+| Replay host: host Python replay (Milvus: Docker standalone) | Python, replay 의존성, target Milvus | [재생 가이드](docs/replay.md) |
 | Replay host: 격리된 CPU container에서 replay | Docker, target Milvus | [Docker 가이드](docs/docker.md) |
 | Text/Image/Audio별 완전한 명령 | workload별 model과 config | [workload 예시](docs/workloads.md) |
 | 0.5TB 이상 capacity artifact | GPU 또는 CPU, 충분한 controller storage | [Vector workload](docs/vector_workloads.md) |
@@ -231,10 +231,10 @@ GPU와 monitoring system이 필요하지 않습니다. Target Milvus endpoint는
 | Python replayer | host의 `python -m milvus_trace.replay` | Python 3.10+, replay lock, artifact, target Milvus | RAGPerf 전체 의존성, dataset/model, GPU, monitoring, source Milvus |
 | Docker replayer | replay container | Docker, replayer image, artifact mount, target Milvus | host Python, RAGPerf 전체 의존성, dataset/model, GPU, monitoring, source Milvus |
 
-#### Docker 없이 Python replayer를 실행하는 경우
+#### Host Python replayer (표준)
 
-여기서 `Docker 없이`라는 말은 **replayer process를 host Python에서 실행한다**는
-뜻입니다. Target Milvus가 Docker standalone으로 실행 중이어도 이 방식에 해당합니다.
+이 표준 경로는 **replayer process를 host Python에서 실행**합니다. Target Milvus는
+Docker standalone으로 실행하며, replayer container는 사용하지 않습니다.
 Record host에서 사용한 full RAGPerf environment를 재사용하거나, 다른 package와 분리된
 replay 전용 environment를 만들 수 있습니다. `setup_venv.sh`는 record용 script이므로
 replay host에서 실행할 필요가 없습니다.
@@ -262,12 +262,19 @@ python -m pip install -r milvus_trace/docker/requirements-replay.lock
 
 외부망이 없는 staged replay VM에서는 위의 PyPI 설치를 실행하지 않습니다. Controller에서
 wheelhouse를 만든 뒤 `staged_remote_replay.sh prepare-replay`가 source와 wheel을 VM으로
-전달하고, VM에서 `pip --no-index`로 같은 lock을 설치합니다. 이 VM은 필요에 따라
-Milvus standalone container를 함께 실행할 수 있지만, replayer 자체는 Python process입니다.
+전달하고, VM에서 `pip --no-index`로 같은 lock을 설치합니다. 표준 staged 경로에서는
+replay VM의 Docker Compose가 Milvus standalone, embedded etcd, MinIO를 실행해야 하며,
+replayer 자체는 staged Python process로 실행합니다. `prepare-replay`는 image를
+load하지만 server를 시작하지 않고, `replay` phase의 `run_diskann_replay.sh`가
+Compose를 시작하고 health check를 통과한 뒤 replay를 시작합니다.
 자세한 경로와 `xfs`/`3FS`/`pNFS` mount 검사는
 [staged remote replay](docs/staged_remote_replay.md)를 따릅니다.
 
 #### Docker replayer를 실행하는 경우
+
+다음은 일반 replay에서 replayer process 자체를 container로 격리하는 선택적 경로입니다.
+Staged remote replay의 표준 경로에서는 Docker replayer image를 사용하지 않고, Docker는
+Milvus standalone server를 실행하는 데만 사용합니다.
 
 이 방식은 replayer 자체를 `milvus_trace/docker/Dockerfile`로 만든 container에서 실행합니다.
 Host에는 Python virtual environment나 replay package를 설치하지 않고 Docker Engine만

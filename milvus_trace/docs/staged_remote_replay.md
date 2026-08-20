@@ -4,6 +4,14 @@ Staged remote replay는 외부망이 되는 controller에서 artifact, `milvus_t
 Python wheel과 Milvus OCI image를 준비해 SSH로 격리 VM에 전달하는 방식입니다. Replay
 VM은 GitHub, Hugging Face, PyPI, Docker Hub에 접속하지 않습니다.
 
+이 문서의 표준 topology는 replay VM에서 Docker Compose로 **Milvus standalone**을
+실행하고, 같은 VM의 staged Python environment에서 replayer를 실행하는 방식입니다.
+즉 Docker는 target Milvus, embedded etcd, MinIO를 제공하는 데 사용하고,
+`milvus_trace.replay` 자체는 host Python process로 실행합니다. `replay` phase의
+`run_diskann_replay.sh`가 Milvus Compose project를 시작하고 client health check를
+통과한 뒤 replayer를 실행하므로, replayer를 수동으로 실행할 때도 이 순서를 지켜야
+합니다.
+
 ```text
 controller                                isolated replay VM
 
@@ -65,7 +73,8 @@ bash milvus_trace/benchmarks/replayer/build_offline_bundle.sh \
 
 다른 Python/platform용 cross-download는 `--python-version`, `--platform`, `--abi`를
 함께 지정합니다. Bundle의 `SHA256SUMS`는 VM에서 install 전에 검증됩니다.
-`prepare-replay`는 다음 명령만 사용합니다.
+`prepare-replay`는 wheel과 image를 replay VM에 설치/load하지만 Milvus server는
+실행하지 않습니다. Replay VM에서 수행되는 핵심 명령은 다음과 같습니다.
 
 ```text
 python -m venv
@@ -92,7 +101,7 @@ template도 있습니다. 예시의 host와 `/absolute/path`는 반드시 바꿉
 | `replay_meta_root` | etcd metadata용 local VM storage |
 | `replay_diskann_root` | 실험 대상 filesystem 위의 DISKANN data directory |
 | `storage_backend`, `expected_fstype` | result label과 mount 검증값 |
-| `replay_milvus_uri` | VM에서 접근할 target Milvus URI |
+| `replay_milvus_uri` | VM에서 접근할 target Milvus URI. 표준 값은 `http://127.0.0.1:19530` |
 
 `lmcache-tracebench`의 `weka01` profile과 같은 jump-user 접속은 다음처럼 지정합니다.
 
@@ -112,6 +121,14 @@ etcd만 `<replay_meta_root>/<run-name>`에 둡니다. Docker image layer는 Dock
 
 ## 4. 단계별 실행
 
+실행 순서는 다음과 같습니다.
+
+1. Replay VM의 Docker, Compose, Python, filesystem prerequisite를 확인합니다.
+2. Controller에서 trace와 offline runtime을 stage합니다.
+3. Replay phase가 Milvus standalone Compose를 시작하고 TCP 및 PyMilvus health check를
+   통과할 때까지 기다립니다.
+4. Health check가 성공한 뒤 staged Python environment의 `milvus_trace.replay`가
+   artifact를 target collection에 재생합니다.
 VM prerequisite를 먼저 검사합니다.
 
 ```bash
@@ -149,6 +166,13 @@ bash milvus_trace/benchmarks/replayer/staged_remote_replay.sh replay \
     --run-name @RUN_NAME@ \
     --uri @MILVUS_URI@
 ```
+
+위 명령에서 호출하는 `run_diskann_replay.sh`는 pre-staged `etcd`, `MinIO`,
+`milvusdb/milvus:v2.4.15` image로 `milvus-diskann-compose.yml`을
+`docker compose up -d --pull never`로 시작합니다. `127.0.0.1:19530`의 TCP 연결과
+PyMilvus `list_collections()` health check가 모두 성공한 뒤에만 Python replayer를
+실행합니다. 기본값은 replay 종료 후 Compose project도 중지하므로, target Milvus가
+실행 중인 상태에서만 replay를 수행한다는 전제를 runner가 보장합니다.
 
 `all` phase는 `prepare-trace`, `prepare-replay`, `replay`를 순서대로 실행합니다.
 단일 runner는 TCP port 개방 뒤에도 Milvus client health check가 성공할 때까지 기다립니다.
