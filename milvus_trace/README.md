@@ -148,6 +148,61 @@ source .venv/bin/activate
 호환되지 않는 일부 버전만 `milvus_trace` 범위에서 보정합니다. Docker, CUDA, C++ compiler와
 system package는 설치하지 않으므로 먼저 준비해야 합니다.
 
+`setup_venv.sh`를 실행하기 전에 다음 host prerequisite를 준비합니다.
+
+| 범위 | 필수 항목 | 비고 |
+| --- | --- | --- |
+| Python | Python 3.10 이상, `venv`/`ensurepip` | 새 virtual environment 생성에 사용 |
+| Native build | CMake 3.22 이상, C++20 compatible compiler | monitoring module `libmsys_pymod` 빌드에 사용 |
+| Python 설치원 | PyPI 또는 접근 가능한 사내 package index | root requirements와 generated build requirements 설치 |
+| Record/서버 | Docker Engine, Compose v2, CUDA driver/toolkit | setup script가 설치하지 않으며 workload와 standalone server에 필요 |
+
+Ubuntu 24.04 기준으로 record/controller host에는 다음 package를 설치합니다.
+`python3-venv`가 venv 안의 pip bootstrap을 제공하므로 별도 system-wide pip는 필수가
+아닙니다. 이미 checkout한 repository를 사용하면 `git`은 생략할 수 있습니다.
+
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+  build-essential cmake git \
+  python3 python3-venv python3-dev \
+  docker.io docker-compose-v2 \
+  openssh-client rsync zstd
+```
+
+Docker daemon을 일반 사용자로 사용하려면 logout/login 후 다음을 실행합니다.
+
+```bash
+sudo usermod -aG docker "$USER"
+```
+
+외부망이 제한된 replay VM에는 다음 package를 apt mirror에서 설치합니다. 이 목록에는
+staged replay, Docker Compose, XFS data mount에 필요한 도구가 포함됩니다.
+
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+  bash coreutils findutils util-linux tar zstd rsync openssh-server \
+  python3 python3-venv docker.io docker-compose-v2 xfsprogs
+```
+
+GPU record를 실행할 때는 NVIDIA driver/CUDA를 host 이미지에 맞게 설치해야 합니다. 3FS와
+pNFS는 Ubuntu 공통 package가 아니라 각 storage 환경의 client/mount package와 설정을
+사용하므로 위 apt 목록에 고정하지 않습니다.
+
+Python lock은 `resource/requirements.in`을 기본으로 하고, setup script가 다음 trace-local
+compatibility override를 임시 requirements에 추가합니다. `pymilvus==2.3.7`은 root
+requirements의 Milvus client pin이고, 나머지는 현재 RAGPerf full environment와의 호환성 보정입니다.
+
+```text
+vllm==0.8.5.post1
+marshmallow<4
+setuptools>=74.1.1,<81
+```
+
+그 외 transitive package의 정확한 버전은 setup 시 생성되는 temporary lock이 관리하므로
+README에 별도로 복사하지 않습니다.
+
 ### Record host
 
 실제 workload를 기록하려면 앞의 setup 스크립트를 완료해야 합니다. 기존 project virtual
