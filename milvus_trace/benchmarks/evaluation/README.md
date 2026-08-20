@@ -1,7 +1,7 @@
 # DISKANN filesystem experiments
 
 이 디렉터리는 같은 Milvus trace artifact를 `xfs`, `3fs`, `pnfs` filesystem에 바꿔
-replay하는 실험 matrix와 진행 순서를 정의합니다. Staging과 VM 준비는
+replay하는 실험 matrix와 진행 순서를 정의합니다. Staging과 replay node 준비는
 [Staged remote replay](../../docs/staged_remote_replay.md), workload 생성은
 [Vector workloads](../../docs/vector_workloads.md)를 따릅니다.
 모든 topology는 같은 `/mnt/nvme/milvus-data` data path를 사용하고

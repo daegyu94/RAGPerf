@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Stage a RAGPerf trace, offline Python runtime, and replay command to an
-# isolated VM. The replay node never contacts GitHub, Hugging Face, or PyPI.
+# isolated storage/replay node. The replay node never contacts GitHub, Hugging Face, or PyPI.
 set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"

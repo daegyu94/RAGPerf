@@ -12,7 +12,7 @@ benchmarks/
 │   └── record_vector_workload.py       # GPU synthetic vector artifact
 ├── replayer/
 │   ├── build_offline_bundle.sh         # wheelhouse + OCI image bundle
-│   ├── staged_remote_replay.sh         # controller → isolated VM
+│   ├── staged_remote_replay.sh         # controller → isolated storage/replay node
 │   └── run_diskann_replay.sh           # one verified filesystem run
 └── evaluation/
     ├── run_diskann_experiments.py      # workload/backend/repeat matrix
@@ -25,7 +25,7 @@ benchmarks/
 | 목적 | 문서 |
 | --- | --- |
 | 0.5TB, 1TB 등 vector artifact 생성 | [Vector workloads](../docs/vector_workloads.md) |
-| 외부망 없는 replay VM 준비와 단일 실행 | [Staged remote replay](../docs/staged_remote_replay.md) |
+| 외부 인터넷이 제한된 replay node 준비와 단일 실행 | [Staged remote replay](../docs/staged_remote_replay.md) |
 | xfs/3FS/pNFS matrix와 측정 순서 | [Evaluation plan](evaluation/README.md) |
 
 모든 Python 명령은 project virtual environment에서 실행합니다. Shell wrapper가 있는

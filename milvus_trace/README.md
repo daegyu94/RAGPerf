@@ -130,7 +130,7 @@ record를 실행한 뒤에는 생성된 collection 이름이 목록에 표시됩
 | Replay host: Python virtual environment replay | Python, replay 의존성, target Milvus | [재생 가이드](docs/replay.md) |
 | Text/Image/Audio별 완전한 명령 | workload별 model과 config | [workload 예시](docs/workloads.md) |
 | 0.5TB 이상 capacity artifact | GPU 또는 CPU, 충분한 controller storage | [Vector workload](docs/vector_workloads.md) |
-| 외부망 없는 VM의 xfs/3FS/pNFS replay | Controller SSH, offline wheels/images, mounted backend | [Staged remote replay](docs/staged_remote_replay.md) |
+| 외부 인터넷이 제한된 replay node의 xfs/3FS/pNFS replay | Controller SSH, offline wheels/images, mounted backend | [Staged remote replay](docs/staged_remote_replay.md) |
 | 반복 실험 matrix | 준비된 세 topology와 trace archive | [실험 계획](benchmarks/evaluation/README.md) |
 
 아래 명령은 모두 repository root에서 실행한다고 가정합니다.
@@ -244,8 +244,8 @@ python -m pip install --upgrade pip
 python -m pip install -r milvus_trace/docker/requirements-replay.lock
 ```
 
-외부망이 없는 staged replay VM에서는 controller가 wheelhouse를 만들고
-`prepare-replay`가 같은 lock을 `pip --no-index`로 설치합니다. Target Milvus를 replay VM에서
+외부 인터넷이 제한된 staged replay node에서는 controller가 wheelhouse를 만들고
+`prepare-replay`가 같은 lock을 `pip --no-index`로 설치합니다. Target Milvus를 replay node에서
 함께 실행하는 topology라면 Docker Compose는 **Milvus standalone server와 etcd/MinIO만**
 제공하고, replayer는 계속 staged Python process로 실행합니다. 자세한 staging과
 `xfs`/`3FS`/`pNFS` mount 검사는 [staged remote replay](docs/staged_remote_replay.md)를

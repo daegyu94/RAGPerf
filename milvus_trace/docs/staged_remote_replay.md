@@ -1,11 +1,11 @@
 # Staged remote DISKANN replay
 
-Staged remote replay는 외부망이 되는 controller에서 artifact, `milvus_trace` source,
-Python wheel과 Milvus OCI image를 준비해 SSH로 격리 VM에 전달하는 방식입니다. Replay
-VM은 GitHub, Hugging Face, PyPI, Docker Hub에 접속하지 않습니다.
+Staged remote replay는 외부 인터넷이 가능한 controller node에서 artifact, `milvus_trace` source, Python wheel과
+Milvus OCI image를 준비해 SSH/rsync로 사내망의 replay/storage node에 전달하는 방식입니다.
+Replay node는 외부 GitHub, Hugging Face, PyPI, Docker Hub에 접속하지 않습니다.
 
-이 문서의 표준 topology는 replay VM에서 Docker Compose로 **Milvus standalone**을
-실행하고, 같은 VM의 staged Python environment에서 replayer를 실행하는 방식입니다.
+이 문서의 표준 topology는 replay node에서 Docker Compose로 **Milvus standalone**을
+실행하고, 같은 node의 staged Python environment에서 replayer를 실행하는 방식입니다.
 즉 Docker는 target Milvus, embedded etcd, MinIO를 제공하는 데 사용하고,
 `milvus_trace.replay` 자체는 host Python process로 실행합니다. `replay` phase의
 `run_diskann_replay.sh`가 Milvus Compose project를 시작하고 client health check를
@@ -13,7 +13,7 @@ VM은 GitHub, Hugging Face, PyPI, Docker Hub에 접속하지 않습니다.
 합니다.
 
 ```text
-controller                                isolated replay VM
+controller                                replay/storage node
 
 trace.tar.zst ───────────────┐          ┌─ apt Python/Docker
 wheelhouse + OCI images ─────┼─ SSH ───>├─ pip --no-index / docker load
@@ -22,13 +22,33 @@ retrieved results <────────────────────�
                                        └─ /mnt/nvme/milvus-data
 ```
 
+B300 cluster에서 사용할 때의 역할은 다음과 같습니다. `weka01`은 controller가 SSH/rsync로
+접속하는 replay node이고, `weka02`부터 `weka07`은 storage cluster node입니다.
+`xfs`는 `weka01`의 local path를 baseline으로 사용하고, `3FS`와 `pNFS`는 같은
+`/mnt/nvme/milvus-data` mount path를 통해 storage cluster에 접근합니다.
+
+```text
+controller node (외부 인터넷)
+        │ SSH + rsync
+        ▼
+weka01 replay node
+        │ /mnt/nvme/milvus-data
+        │ storage network (3FS/pNFS)
+        ├── weka02 storage node
+        ├── weka03 storage node
+        ├── weka04 storage node
+        ├── weka05 storage node
+        ├── weka06 storage node
+        └── weka07 storage node
+```
+
 일반 replay option과 result schema는 [재생 가이드](replay.md), 측정 경계는
-[Benchmark 방법론](benchmark_methodology.md)이 단일 출처입니다. 이 문서는 격리 VM
+[Benchmark 방법론](benchmark_methodology.md)이 단일 출처입니다. 이 문서는 제한된 사내망 replay node로의
 staging과 DISKANN mount 교체만 설명합니다.
 
-## 1. Replay VM의 apt 준비
+## 1. Replay node의 apt 준비
 
-Ubuntu/Debian VM에는 내부 apt mirror에서 다음 도구만 설치합니다.
+Ubuntu/Debian replay node에는 사내 apt mirror에서 다음 도구만 설치합니다.
 
 ```bash
 sudo apt-get update
@@ -39,7 +59,7 @@ sudo apt-get install -y \
 
 배포판에 따라 Compose v2 package 이름은 다를 수 있습니다. `docker compose version`이
 성공해야 하며 replay account는 Docker daemon과 DISKANN data directory에 접근할 수 있어야
-합니다. Python package나 container image를 VM에서 내려받지 않습니다.
+합니다. Python package나 container image를 replay node에서 내려받지 않습니다.
 
 XFS, 3FS, pNFS 실험은 모두 `/mnt/nvme/milvus-data`를 DISKANN data path로
 사용합니다. Backend를 바꿀 때는 이 경로를 받치는 filesystem을 바꾸고, script는
@@ -62,7 +82,7 @@ docker pull minio/minio:RELEASE.2023-03-20T20-16-18Z
 docker pull milvusdb/milvus:v2.4.15
 ```
 
-Replay VM의 Python version/architecture와 맞는 wheelhouse를 만듭니다.
+Replay node의 Python version/architecture와 맞는 wheelhouse를 만듭니다.
 
 ```bash
 source .venv/bin/activate
@@ -72,9 +92,9 @@ bash milvus_trace/benchmarks/replayer/build_offline_bundle.sh \
 ```
 
 다른 Python/platform용 cross-download는 `--python-version`, `--platform`, `--abi`를
-함께 지정합니다. Bundle의 `SHA256SUMS`는 VM에서 install 전에 검증됩니다.
-`prepare-replay`는 wheel과 image를 replay VM에 설치/load하지만 Milvus server는
-실행하지 않습니다. Replay VM에서 수행되는 핵심 명령은 다음과 같습니다.
+함께 지정합니다. Bundle의 `SHA256SUMS`는 replay node에서 install 전에 검증됩니다.
+`prepare-replay`는 wheel과 image를 replay node에 설치/load하지만 Milvus server는
+실행하지 않습니다. Replay node에서 수행되는 핵심 명령은 다음과 같습니다.
 
 ```text
 python -m venv
@@ -92,16 +112,18 @@ template도 있습니다. 예시의 host와 `/absolute/path`는 반드시 바꿉
 
 | Key | 역할 |
 | --- | --- |
-| `controller_repo_root` | controller의 RAGPerf checkout; VM에는 `milvus_trace`만 전송 |
+| `controller_repo_root` | controller의 RAGPerf checkout; replay node에는 `milvus_trace`만 전송 |
 | `controller_trace_root` | category별 `.tar.zst` archive root |
 | `controller_runtime_root` | wheelhouse/image bundle |
 | `controller_output_root` | 회수한 run directory root |
+| `replay_host`, `replay_user`, `replay_port` | controller가 SSH/rsync로 접근할 replay node (B300: `weka01`) |
+| `replay_jump_user` | jump account를 거쳐 replay node에 접속할 때의 계정 |
 | `replay_repo_root`, `replay_venv_root` | staged source와 offline venv |
 | `replay_trace_root`, `replay_output_root` | 추출 trace와 remote result |
-| `replay_meta_root` | etcd metadata용 local VM storage |
+| `replay_meta_root` | etcd metadata용 local node storage |
 | `replay_diskann_root` | 실험 대상 filesystem 위의 DISKANN data directory |
 | `storage_backend`, `expected_fstype` | result label과 mount 검증값 |
-| `replay_milvus_uri` | VM에서 접근할 target Milvus URI. 표준 값은 `http://127.0.0.1:19530` |
+| `replay_milvus_uri` | node에서 접근할 target Milvus URI. 표준 값은 `http://127.0.0.1:19530` |
 
 `lmcache-tracebench`의 `weka01` profile과 같은 jump-user 접속은 다음처럼 지정합니다.
 
@@ -123,13 +145,13 @@ etcd만 `<replay_meta_root>/<run-name>`에 둡니다. Docker image layer는 Dock
 
 실행 순서는 다음과 같습니다.
 
-1. Replay VM의 Docker, Compose, Python, filesystem prerequisite를 확인합니다.
+1. Replay node의 Docker, Compose, Python, filesystem prerequisite를 확인합니다.
 2. Controller에서 trace와 offline runtime을 stage합니다.
 3. Replay phase가 Milvus standalone Compose를 시작하고 TCP 및 PyMilvus health check를
    통과할 때까지 기다립니다.
 4. Health check가 성공한 뒤 staged Python environment의 `milvus_trace.replay`가
    artifact를 target collection에 재생합니다.
-VM prerequisite를 먼저 검사합니다.
+replay node prerequisite를 먼저 검사합니다.
 
 ```bash
 bash milvus_trace/benchmarks/replayer/staged_remote_replay.sh \
