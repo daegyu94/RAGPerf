@@ -182,25 +182,14 @@ inserts-00000.parquet          # timed insert가 있을 때만 생성
 `verify_artifact()`는 format, `incomplete`, checksum, manifest에 기록된 shard row 수를
 검사합니다. 출력 파일의 의미는 [artifact 형식](artifact_format.md)을 참조합니다.
 
-## Queue overflow와 writer 오류
+## 주의 사항
 
-Queue가 `max_queue_bytes`를 초과하거나 writer에서 오류가 발생해도 이미 진행 중인 source
-Milvus workload는 계속 실행합니다. Recorder는 첫 오류 원인을
-`incomplete_reason`에 남기고 종료 시 다음과 같이 처리합니다.
-
-1. `incomplete: true` manifest와 checksum을 기록합니다.
-2. `TraceRecordingError`를 발생시켜 record command를 실패시킵니다.
-3. Replayer의 `verify_artifact()`가 해당 artifact를 거부합니다.
-
-부분 artifact를 정상 workload처럼 사용하지 마십시오. Queue overflow라면 source
-workload를 바꾸지 않은 상태에서 `max_queue_bytes`를 늘리고 새 directory와 새 source
-collection으로 다시 기록합니다.
-
-## 개인정보와 민감 정보
-
-Artifact에는 Milvus에 실제 insert한 text와 scalar metadata가 평문 JSON/Parquet로
-들어갑니다. API token은 manifest에 저장하지 않지만 dataset의 text, file path, document
-identifier는 저장될 수 있습니다. 공유하기 전에 workload별 payload 정책을 확인합니다.
-
-Audio의 원본 bytes와 query transcript 보존 범위는 [Audio 문서](audio.md)에 설명되어
-있습니다.
+- Queue overflow나 writer 오류가 발생해도 source Milvus workload는 계속 진행될 수 있습니다.
+  Recorder는 `incomplete_reason`을 남기고 `incomplete: true` artifact를 만든 뒤
+  `TraceRecordingError`를 발생시키며, `verify_artifact()`와 replayer는 이를 거부합니다.
+  부분 artifact를 replay하지 말고, Queue overflow 후에는 `max_queue_bytes`를 늘린 뒤
+  새 artifact directory와 source collection으로 다시 기록합니다.
+- Artifact에는 insert한 text와 scalar metadata가 평문 JSON/Parquet로 저장될 수 있습니다.
+  API token은 manifest에 저장하지 않지만 text, file path, document identifier 등 민감정보가
+  포함될 수 있으므로 공유 전 payload 정책을 확인합니다. Audio 원본 bytes와 query transcript
+  보존 범위는 [Audio 문서](audio.md)를 참조합니다.
