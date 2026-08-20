@@ -195,11 +195,14 @@ package를 설치합니다. 마지막에는 `libmsys_pymod`를 build하므로 re
 
 compatibility override는 다음과 같습니다. `pymilvus==2.3.7`은 root requirements의
 Milvus client pin이고, 나머지는 현재 RAGPerf full environment와의 호환성 보정입니다.
+생성된 monitoring protobuf 모듈이 요구하는 runtime과 맞추기 위해 `protobuf`도 trace
+환경에서만 고정합니다.
 
 ```text
 vllm==0.8.5.post1
 marshmallow<4
 setuptools>=74.1.1,<81
+protobuf==6.32.0
 ```
 
 그 외 transitive package의 정확한 버전은 setup 시 생성되는 temporary lock이 관리하므로

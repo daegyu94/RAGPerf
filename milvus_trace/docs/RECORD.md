@@ -9,15 +9,15 @@ artifact 하나를 만든 뒤 이 문서에서 세부 동작을 확인하는 순
 
 ## 실행 전 확인
 
-- RAGPerf 전체 의존성과 workload별 dataset/model dependency를 설치합니다.
-- `src/monitoring_sys/libmsys*.so`를 build합니다. `src/run_new.py` 실행에 필요합니다.
-- Source Milvus에 collection 생성, insert, index 생성, search/query 권한이 있어야 합니다.
-- Source는 이미 실행 중인 standalone 또는 distributed Milvus endpoint여야 합니다.
-  RAGPerf가 서버를 설치하거나 시작하지는 않습니다.
-- 처음 테스트할 때는 standalone 서버 한 대를 source로 사용하면 됩니다.
-- Repository root와 `src`를 모두 Python import path에 둡니다.
-- Artifact를 담을 충분한 disk 공간을 확인합니다. Insert vector와 scalar metadata가
-  Parquet에 저장되므로 corpus가 커지면 artifact도 커집니다.
+- RAGPerf 전체 의존성과 workload별 dataset/model dependency를 설치하고,
+  `src/monitoring_sys/libmsys*.so`를 build합니다. `src/run_new.py` 실행에 필요합니다.
+- Source Milvus는 실행 중인 standalone 또는 distributed endpoint여야 하며, collection 생성,
+  insert, index 생성, search/query 권한이 필요합니다. RAGPerf가 서버를 시작하지 않으므로
+  처음에는 standalone 서버 한 대를 사용하면 됩니다.
+- Artifact를 저장할 충분한 disk 공간을 확보합니다. Vector와 scalar metadata가 Parquet에
+  저장되므로 corpus가 커질수록 artifact도 커집니다.
+
+Record host에서 repository root와 `src`를 import path에 추가합니다.
 
 ```bash
 source .venv/bin/activate
