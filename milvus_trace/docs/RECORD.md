@@ -99,36 +99,48 @@ sys:
 
 ## 기록 구간
 
-RAGPerf는 다음 두 구간을 구분합니다.
+Record는 collection을 준비하는 `bootstrap` 단계와 실제 요청 도착 간격을 남기는 `timed`
+단계로 나뉩니다. `index create`와 `model load` 자체는 trace event가 아니라 두 단계의
+경계를 정하는 작업입니다.
 
 ```text
-Setup                                           Timed workload
-
-corpus insert ── index create ── model load ── marker ── search/query/insert ...
-     │                                                │
-     └── corpus-*.parquet                             └── events-*.parquet
+Record 시작
+  │
+  ├─ Bootstrap (timed 아님)
+  │    corpus insert ── index create ── model load
+  │    └─ corpus-*.parquet
+  │
+  ├─ marker (relative offset = 0)
+  │
+  └─ Timed workload
+       first query embedding/ASR ── search/query/insert ...
+       ├─ events-*.parquet       (순서·offset·event parameter)
+       └─ searches-*.parquet / inserts-*.parquet / scalar-queries-*.parquet (실제 payload)
 ```
 
-- Index 생성 전이면서 timed marker도 설정되지 않은 `insert`는 bootstrap corpus입니다.
-- Text/Image pipeline은 model load 후 첫 query embedding 직전에 marker를 설정합니다.
-- Audio pipeline도 query encoder를 load한 뒤 첫 audio batch embedding 전에 marker를
-  설정합니다.
-- 첫 search offset에는 첫 query embedding/ASR 시간이 포함됩니다.
-- 이후 event 간격에는 retrieval, reranking, generation 등 다음 Milvus 호출 전까지의
-  upstream 시간이 포함됩니다.
-- `begin_timed_workload()`를 호출하지 않은 integration에서는 첫 search/query/late
-  insert가 자동으로 offset 0의 첫 event가 됩니다.
+- **Bootstrap corpus**: Index가 생성되지 않았고 timed marker도 설정되지 않은 동안의
+  insert입니다. Replay target collection을 처음 채우는 데 사용되며 timed event 수와
+  도착 간격에는 포함되지 않습니다. 보통 `corpus-*.parquet`에 저장됩니다.
+- **Marker**: timed workload의 시각 기준점입니다. Text/Image는 model load 후 첫 query
+  embedding 직전에, Audio는 query encoder load 후 첫 audio batch embedding 직전에
+  설정합니다. Marker 자체가 Milvus 요청을 보내지는 않습니다.
+- **첫 event**: Marker 뒤의 embedding/ASR 시간이 지나 첫 search가 호출되므로 첫 search의
+  `relative_timestamp_ns`에는 그 시간이 포함됩니다. 이후 event 간격에는 retrieval,
+  reranking, generation 등 다음 Milvus 호출 전의 upstream 시간이 포함됩니다.
+- **Marker를 직접 설정하지 않은 integration**: 첫 search/query/timed insert를 recorder가
+  만나는 시점에 marker를 자동으로 만들고, 그 event의 offset을 0으로 기록합니다.
 
-Recorder가 재현 가능한 것은 Milvus 요청 payload, 순서, 도착 간격입니다. GPU kernel이나
-model execution 자체를 artifact에 저장하지 않습니다.
+Recorder가 재현하는 것은 Milvus 요청 payload, 제출 순서와 도착 간격입니다. GPU kernel,
+model execution 자체, Milvus response/result는 trace artifact에 저장하지 않습니다.
 
 ## 저장하는 데이터
 
-| Operation | 저장하는 값 | 저장하지 않는 값 |
-| --- | --- | --- |
-| bootstrap/timed `insert` | vector, JSON 호환 scalar와 text, client parameter | Milvus response |
-| `search` | query vector, limit/filter/output field/search parameter | 사용자가 입력한 query 원문, result |
-| `query` | filter와 query parameter | query result |
+| Operation | Payload shard | Event metadata | 저장하지 않는 값 |
+| --- | --- | --- | --- |
+| Bootstrap insert | `corpus-*.parquet`의 vector와 JSON scalar/text | 없음 | insert parameter, Milvus response |
+| Timed insert | `inserts-*.parquet`의 vector와 JSON scalar/text | `events-*.parquet`의 순서·offset·parameter | Milvus response |
+| Search | `searches-*.parquet`의 query vector | `events-*.parquet`의 순서·offset·limit/filter/output/search parameter | query 원문, search result |
+| Query | `scalar-queries-*.parquet`의 filter와 query parameter | `events-*.parquet`의 순서·offset | query result |
 
 NumPy scalar/array처럼 `tolist()` 또는 `item()`으로 변환 가능한 값은 JSON 값으로
 정규화합니다. JSON으로 표현할 수 없는 객체가 parameter에 들어오면 Milvus 요청을
