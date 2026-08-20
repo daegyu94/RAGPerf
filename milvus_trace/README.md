@@ -135,18 +135,11 @@ record를 실행한 뒤에는 생성된 collection 이름이 목록에 표시됩
 
 ## 1. 설치
 
-### Record host 전체 설치 (venv)
+### Record host 준비와 실행
 
-실제 record를 처음 준비한다면 repository root에서 다음 스크립트를 실행합니다.
-
-```bash
-./milvus_trace/scripts/setup_venv.sh
-source .venv/bin/activate
-```
-
-스크립트는 root의 RAGPerf requirements를 바탕으로 임시 lock을 만들고, 현재 PyPI와
-호환되지 않는 일부 버전만 `milvus_trace` 범위에서 보정합니다. Docker, CUDA, C++ compiler와
-system package는 설치하지 않으므로 먼저 준비해야 합니다.
+실제 workload record는 아래 순서로 진행합니다. 모든 명령은 repository root에서 실행한다고
+가정합니다. 먼저 record host의 system prerequisite를 준비하고, 그 다음 Python environment를
+설정합니다.
 
 `setup_venv.sh`를 실행하기 전에 다음 host prerequisite를 준비합니다.
 
@@ -190,9 +183,28 @@ GPU record를 실행할 때는 NVIDIA driver/CUDA를 host 이미지에 맞게 �
 pNFS는 Ubuntu 공통 package가 아니라 각 storage 환경의 client/mount package와 설정을
 사용하므로 위 apt 목록에 고정하지 않습니다.
 
-Python lock은 `resource/requirements.in`을 기본으로 하고, setup script가 다음 trace-local
-compatibility override를 임시 requirements에 추가합니다. `pymilvus==2.3.7`은 root
-requirements의 Milvus client pin이고, 나머지는 현재 RAGPerf full environment와의 호환성 보정입니다.
+위 prerequisite를 준비한 뒤, 처음 설치하는 host 또는 새 shell에서 다음 공통 흐름을
+실행합니다. 이미 project virtual environment가 있으면 첫 줄은 건너뛰고 마지막 두 줄만
+실행합니다.
+
+```bash
+# 처음 준비하는 경우에만 실행
+./milvus_trace/scripts/setup_venv.sh
+
+# setup 완료 후 또는 새 shell에서 실행
+source .venv/bin/activate
+export PYTHONPATH="$PWD:$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
+```
+
+`setup_venv.sh`는 root의 RAGPerf `resource/requirements.in`을 바탕으로 temporary lock을
+만들고, 현재 PyPI와 호환되지 않는 일부 버전을 `milvus_trace` 범위에서만 보정한 뒤 Python
+package를 설치합니다. 마지막에는 `libmsys_pymod`를 build하므로 record 실행 전에
+`src/monitoring_sys/libmsys*.so`가 생성되어 있어야 합니다. `--skip-monitoring` 옵션으로
+실행했다면 record 전에 옵션 없이 setup을 다시 실행합니다. Docker, CUDA, C++ compiler와
+나머지 system package는 이 스크립트가 설치하지 않습니다.
+
+compatibility override는 다음과 같습니다. `pymilvus==2.3.7`은 root requirements의
+Milvus client pin이고, 나머지는 현재 RAGPerf full environment와의 호환성 보정입니다.
 
 ```text
 vllm==0.8.5.post1
@@ -201,20 +213,9 @@ setuptools>=74.1.1,<81
 ```
 
 그 외 transitive package의 정확한 버전은 setup 시 생성되는 temporary lock이 관리하므로
-README에 별도로 복사하지 않습니다.
-
-### Record host
-
-실제 workload를 기록하려면 앞의 setup 스크립트를 완료해야 합니다. 기존 project virtual
-environment를 사용할 때는 새 환경을 만들지 말고 그 환경을 활성화합니다.
-
-```bash
-source .venv/bin/activate
-export PYTHONPATH="$PWD:$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
-```
-
-`src/run_new.py`는 trace 사용 여부와 관계없이 monitoring module을 import하므로
-`src/monitoring_sys/libmsys*.so`도 build되어 있어야 합니다. Workload별 추가 요구 사항은
+README에 별도로 복사하지 않습니다. `source`는 현재 shell에 virtual environment를
+적용하는 단계이고, `PYTHONPATH`는 repository의 `src`와 root 모듈을 `run_new.py` 및
+workload script가 찾도록 합니다. Workload별 추가 요구 사항은
 [workload 예시](docs/WORKLOADS.md#workload별-요구-사항)를 확인합니다.
 
 Milvus server는 앞의 helper로 준비합니다. Record host에는 collection 생성, insert,
