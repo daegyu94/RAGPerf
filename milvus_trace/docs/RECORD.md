@@ -26,23 +26,35 @@ export PYTHONPATH="$PWD:$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
 
 ## Run마다 새로 정할 값
 
-다음 두 대상은 이전 run과 공유하지 않습니다.
+이 문서의 Text record 예시는 `config/milvus_trace_text.yaml`을 사용합니다. Image와 Audio는 각각
+`config/milvus_trace_image.yaml`, `config/milvus_audio.yaml`(작은 확인은
+`config/milvus_audio_smoke.yaml`)으로 바꿉니다. `src/run_new.py --config`에 전달한 파일이
+이번 record의 실제 workload config입니다.
 
-1. `trace.output_dir`: 이번 record의 trace artifact directory입니다. 존재하지 않거나 비어
-   있어야 합니다.
-2. `sys.vector_db.collection_name`: source Milvus에 아직 존재하지 않는 collection
+각 run에서 다음 두 config 값을 새로 정합니다.
 
-Recorder는 output directory에 파일이 하나라도 있으면 `FileExistsError`로 시작을 거부하며,
-기존 artifact를 삭제하거나 덮어쓰지 않습니다. Record가 실패해 partial artifact가 남은
-경우에도 같은 경로를 재사용하지 말고 새 run path를 선택합니다. `trace`, `trace artifact`,
-`bootstrap corpus`의 정의는 [artifact 형식](ARTIFACT_FORMAT.md#용어)을 참조합니다.
+1. `sys.vector_db.collection_name`: Source Milvus에 아직 없는 collection 이름
+2. `sys.vector_db.trace.output_dir`: 이번 run의 trace artifact directory
 
-예시 config의 collection 이름을 `ragperf_trace_text_run_001`처럼 run별로 바꾸고,
-`MNTPNT`도 run 전용 경로로 지정하면 실수를 줄일 수 있습니다.
+Text run의 최소 예시는 다음과 같습니다. `${MNTPNT}`는 아래 환경 변수에서 확장됩니다.
+
+```yaml
+sys:
+  vector_db:
+    collection_name: ragperf_trace_text_run_001
+    trace:
+      output_dir: ${MNTPNT}/artifacts/text
+```
+
+예시 config를 직접 수정하거나 run 전용 복사본을 만들어 위 두 값만 바꿉니다. Recorder는
+`trace.output_dir`에 파일이 하나라도 있으면 `FileExistsError`로 시작을 거부하므로,
+`MNTPNT`도 run 전용 경로로 지정하고 이전 artifact directory를 재사용하지 않습니다.
 
 ## 공통 환경 변수
 
-예시 config는 shell 환경 변수를 시작 시점에 확장합니다.
+위 YAML config의 `${MNTPNT}`, `${MILVUS_URI}`, `${RAG_DEVICE}`, `${GENERATION_DEVICE}`를
+실행 전에 shell 환경 변수로 설정합니다. `MSYS_CONFIG`는 YAML 변수라기보다
+`--msys-config` CLI option에 전달하는 monitoring 설정 파일 경로입니다.
 
 ```bash
 export MNTPNT=/path/to/ragperf-data/run-001
@@ -52,8 +64,9 @@ export GENERATION_DEVICE=cuda:1
 export MSYS_CONFIG=config/monitor/example_config.yaml
 ```
 
-설정되지 않은 `${...}`가 config에 남아 있으면 RAGPerf는 dataset이나 model을 load하기
-전에 `config contains unset environment variable(s)` 오류를 반환합니다.
+RAGPerf는 `--config`로 읽은 YAML의 `${...}`를 시작 시점에 확장합니다. 설정되지 않은
+변수가 남아 있으면 dataset이나 model을 load하기 전에
+`config contains unset environment variable(s)` 오류로 종료합니다.
 
 ## Trace 설정
 

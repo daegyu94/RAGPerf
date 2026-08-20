@@ -396,7 +396,10 @@ record→replay 경로의 크기만 줄인 실행입니다.
 
 ## 3. 실제 workload 기록
 
-Text 예시의 공통 환경을 준비합니다. 경로와 endpoint는 환경에 맞게 바꿉니다.
+Text record는 `config/milvus_trace_text.yaml`을 사용합니다. Image/Audio는 각각
+`config/milvus_trace_image.yaml`, `config/milvus_audio.yaml`로 바꿉니다. `MNTPNT`,
+`MILVUS_URI`, `RAG_DEVICE`, `GENERATION_DEVICE`는 해당 YAML의 환경변수 값을 확장합니다.
+`MSYS_CONFIG`는 monitoring 설정 경로이고, `PYTHONPATH`는 repository module import에 사용합니다.
 
 ```bash
 export MNTPNT=/path/to/ragperf-data/run-001
@@ -411,7 +414,8 @@ mkdir -p "$MNTPNT/artifacts" "$MNTPNT/results"
 
 실행 전 [`config/milvus_trace_text.yaml`](../config/milvus_trace_text.yaml)의
 `sys.vector_db.collection_name`을 이번 run 전용 이름으로 바꿉니다. 예를 들어
-`ragperf_trace_text_run_001`을 사용합니다. Trace artifact directory와 source collection을
+`ragperf_trace_text_run_001`을 사용합니다. `sys.vector_db.trace.output_dir`도 이번 run 전용
+trace artifact directory를 가리키도록 확인합니다. Trace artifact directory와 source collection을
 이전 run과 공유하지 마십시오. Recorder는 기존 파일이 있는 artifact directory를 거부하며,
 자동으로 비우거나 덮어쓰지 않습니다. 용어 정의는
 [artifact 형식](docs/ARTIFACT_FORMAT.md#용어)을 참조합니다.

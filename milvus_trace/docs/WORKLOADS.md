@@ -46,6 +46,10 @@ export PYTHONPATH="$PWD:$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
 mkdir -p "$MNTPNT/artifacts" "$MNTPNT/results"
 ```
 
+Workload YAML의 환경변수는 `MNTPNT`, `MILVUS_URI`, `RAG_DEVICE`, `GENERATION_DEVICE`에서
+확장됩니다. `MSYS_CONFIG`는 YAML 값이 아니라 `--msys-config`에 전달하는 monitoring
+config 경로입니다.
+
 서로 다른 Milvus 환경의 성능을 비교할 때만 두 URI를 각각 다른 서버로 바꿉니다.
 
 GPU가 하나라면 두 device 변수를 같은 값으로 지정할 수 있습니다. 모델이 CPU를
