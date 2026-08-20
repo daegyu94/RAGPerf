@@ -5,7 +5,7 @@ dataset, embedding/ASR, generation 의존성이 필요하고 replay에는 Milvus
 필요합니다. 0.5TB, 1TB처럼 용량을 통제한 synthetic DISKANN dataset은 상세 내용을
 여기에 중복하지 않고 [Vector workload 기록](vector_workloads.md)에서 설명합니다.
 
-먼저 [Milvus trace 설치](../README.md#1-설치)와 standalone Milvus 서버 준비를
+먼저 [Milvus trace 설치](../README.md#1-host별-설치와-실행)와 Milvus endpoint 준비를
 완료합니다. 처음 테스트에서는 하나의 서버를 record와 replay에 함께 사용하고, source
 collection과 target collection만 서로 다르게 지정하면 됩니다.
 
@@ -18,7 +18,7 @@ collection과 target collection만 서로 다르게 지정하면 됩니다.
 | Audio | `torchcodec`, Whisper, Sentence Transformers. 작은 run은 CPU 가능 | Audio file/decoder, Whisper, embedding model, GPU |
 
 모든 record 명령은 monitoring system을 시작하므로 `src/monitoring_sys/libmsys*.so`와
-`--msys-config`가 필요합니다. Native replay에는 이 monitoring module이 필요하지
+`--msys-config`가 필요합니다. Python replay에는 이 monitoring module이 필요하지
 않습니다.
 
 Audio smoke config는 generation/evaluate를 끄므로 vLLM 없이 실행할 수 있습니다. Text/Image
@@ -30,7 +30,7 @@ source Milvus는 record 시 RAGPerf가 사용하는 endpoint이고, target Milvu
 재생할 endpoint입니다. 두 endpoint는 같아도 되지만 replay collection은 존재하지 않는
 새 이름이어야 합니다.
 
-처음 실행할 때는 다음처럼 같은 standalone 서버를 두 변수에 지정합니다.
+처음 실행할 때는 다음처럼 같은 Milvus endpoint를 두 변수에 지정합니다.
 
 ```bash
 export MNTPNT=/path/to/ragperf-data
@@ -40,8 +40,6 @@ export RAG_DEVICE=cuda:0
 export GENERATION_DEVICE=cuda:1
 export MSYS_CONFIG=config/monitor/example_config.yaml
 export MILVUS_TOKEN=root:Milvus
-export REPLAYER_IMAGE=ragperf-milvus-replayer:local
-export DOCKER_NETWORK=milvus-network
 export PYTHONPATH="$PWD:$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
 mkdir -p "$MNTPNT/artifacts" "$MNTPNT/results"
 ```
@@ -86,7 +84,7 @@ python src/run_new.py \
 `SHA256SUMS`가 생성됩니다. Text pipeline에 timed query/insert가 추가된 경우에만 해당
 payload shard도 생성됩니다.
 
-### Native replay
+### Python replay
 
 ```bash
 python -m milvus_trace.replay \
@@ -95,20 +93,6 @@ python -m milvus_trace.replay \
   --token "$MILVUS_TOKEN" \
   --collection replay_text \
   --result-file "$MNTPNT/results/text.json"
-```
-
-### Docker replay
-
-```bash
-docker run --rm --network "$DOCKER_NETWORK" \
-  -v "$MNTPNT/artifacts/text:/artifact:ro" \
-  -v "$MNTPNT/results:/output" \
-  "$REPLAYER_IMAGE" \
-  --artifact-dir /artifact \
-  --uri "$REPLAY_MILVUS_URI" \
-  --token "$MILVUS_TOKEN" \
-  --collection replay_text_docker \
-  --result-file /output/text-docker.json
 ```
 
 ## Image RAG
@@ -133,7 +117,7 @@ Image retrieval은 vector search 후 같은 `doc_id`의 vector를 Milvus `query`
 late-interaction score를 계산합니다. 따라서 artifact에는 `search`와 scalar `query`
 event가 함께 기록될 수 있습니다.
 
-### Native replay
+### Python replay
 
 ```bash
 python -m milvus_trace.replay \
@@ -144,28 +128,22 @@ python -m milvus_trace.replay \
   --result-file "$MNTPNT/results/image.json"
 ```
 
-### Docker replay
-
-```bash
-docker run --rm --network "$DOCKER_NETWORK" \
-  -v "$MNTPNT/artifacts/image:/artifact:ro" \
-  -v "$MNTPNT/results:/output" \
-  "$REPLAYER_IMAGE" \
-  --artifact-dir /artifact \
-  --uri "$REPLAY_MILVUS_URI" \
-  --token "$MILVUS_TOKEN" \
-  --collection replay_image_docker \
-  --result-file /output/image-docker.json
-```
-
-replay는 recorded Milvus payload만 전송하므로 target host에 PDF, Poppler, ColPali,
-vision LLM이 필요하지 않습니다. `filepath`는 scalar payload로 보존되지만 replay가
-그 파일을 열지는 않습니다.
+Python replay는 recorded Milvus payload만 전송하므로 target host에 PDF, Poppler, ColPali,
+vision LLM이 필요하지 않습니다. `filepath`는 scalar payload로 보존되지만 replay가 그
+파일을 열지는 않습니다.
 
 ## Audio RAG
 
 설정 파일은 [`config/milvus_audio.yaml`](../../config/milvus_audio.yaml)입니다.
 LibriSpeech audio를 Whisper로 transcript한 뒤 sentence vector를 생성합니다.
+
+Audio record host에는 `torchcodec`와 FFmpeg shared library가 필요합니다.
+`ffmpeg -version`으로 FFmpeg를 확인할 수 있습니다. 작은 기능 확인에는
+`config/milvus_audio_smoke.yaml`을 사용합니다. 이 설정은 streaming dummy dataset에서
+8개 sample만 처리하므로 `sample_count: 8`을 사용합니다.
+
+Whisper와 embedding model은 record 때만 필요합니다. Replay는 artifact에 저장된 Milvus
+payload를 재생하므로 Whisper, `torch`, CUDA, audio decoder는 필요하지 않습니다.
 
 정확한 데이터 수는 `rag.audio.sample_count`로 지정합니다. 값이 `null`이면
 `bench.preprocessing.dataset_ratio`를 사용합니다. streaming dataset에서는 전체
@@ -182,7 +160,7 @@ python src/run_new.py \
 insert에는 vector, ASR transcript와 JSON metadata가 기록됩니다. query audio와 query
 transcript 원문은 artifact에 저장되지 않고, Milvus에 전달한 search vector만 저장됩니다.
 
-### Native replay
+### Python replay
 
 ```bash
 python -m milvus_trace.replay \
@@ -191,20 +169,6 @@ python -m milvus_trace.replay \
   --token "$MILVUS_TOKEN" \
   --collection replay_audio \
   --result-file "$MNTPNT/results/audio.json"
-```
-
-### Docker replay
-
-```bash
-docker run --rm --network "$DOCKER_NETWORK" \
-  -v "$MNTPNT/artifacts/audio:/artifact:ro" \
-  -v "$MNTPNT/results:/output" \
-  "$REPLAYER_IMAGE" \
-  --artifact-dir /artifact \
-  --uri "$REPLAY_MILVUS_URI" \
-  --token "$MILVUS_TOKEN" \
-  --collection replay_audio_docker \
-  --result-file /output/audio-docker.json
 ```
 
 target host에는 Whisper, audio decoder, `torch`, CUDA가 필요하지 않습니다.

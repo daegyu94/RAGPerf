@@ -109,4 +109,4 @@ load하므로 `rows_per_shard`, vector dimension과 scalar 크기가 peak memory
 - `timing`, `time_scale`, `max-in-flight`, `bootstrap-batch-size`, `warmup`을 함께
   기록합니다.
 - Result의 scheduler lag, maximum in-flight, failures를 latency와 함께 보고합니다.
-- Container replay라면 network mode와 replay host resource도 동일하게 유지합니다.
+- Replay host의 network path와 CPU/memory resource도 비교 실험에서 동일하게 유지합니다.

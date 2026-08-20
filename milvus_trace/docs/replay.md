@@ -11,18 +11,14 @@ record host의 dataset, model, GPU는 필요하지 않습니다.
 
 - `verify_artifact()`로 artifact가 `incomplete: false`인지, checksum과 shard row 수가 모두
   일치하는지 확인합니다.
-- Target Milvus는 이미 실행 중이어야 합니다. Replayer는 client만 제공하며 server를 설치하거나
-  시작하지 않습니다. 처음에는 record와 replay에 같은 standalone endpoint를 사용해도 됩니다.
-- Staged remote replay의 표준 경로에서는 target을 replay VM의 Docker Compose standalone
-  Milvus로 준비합니다. `prepare-replay`가 pre-staged image를 load하고, replay phase의
-  runner가 server를 시작해 health check를 통과한 뒤 Python replayer를 실행합니다.
+- Target Milvus endpoint는 이미 실행 중이어야 합니다. Replayer는 client만 제공하며 server를
+  설치하거나 시작하지 않습니다. 처음에는 record와 replay에 같은 endpoint를 사용해도 됩니다.
 - Target에 collection/index 생성, insert, flush, load, search/query 권한이 있고 recorded vector
   dimension, metric, index type을 지원하는지 확인합니다. `--collection`은 아직 존재하지 않는
   새 이름이어야 합니다.
-- 실행 방식에 따라 준비합니다. Python CLI는
-  [`requirements-replay.lock`](../docker/requirements-replay.lock)을 설치하면 되며 RAGPerf
-  pipeline, dataset/model, GPU와 monitoring system은 필요하지 않습니다. Docker replay는
-  local Python package 없이 [Docker 문서](docker.md)의 image를 사용합니다.
+- Host에서 `python -m milvus_trace.replay`를 직접 실행하려면 Python 3.10 이상과
+  [`requirements-replay.lock`](../docker/requirements-replay.lock)을 준비합니다. RAGPerf
+  pipeline, dataset/model, GPU와 monitoring system은 필요하지 않습니다.
 
 ## Artifact 검증
 
@@ -198,5 +194,6 @@ drop을 수행하지 않습니다.
 | `max-in-flight ... reached` | Target 처리량, 배속, in-flight 상한 확인 |
 | Milvus index 오류 | Target server가 recorded index/metric을 지원하는지 확인 |
 
-Docker 실행 문제는 [Docker 문서](docker.md), workload별 명령은
+원격 VM에 artifact와 replay environment를 전달하는 절차는
+[staged remote replay](staged_remote_replay.md), workload별 명령은
 [workload 예시](workloads.md)를 참조합니다.
