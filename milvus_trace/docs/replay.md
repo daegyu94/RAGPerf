@@ -9,21 +9,21 @@ record host의 dataset, model, GPU는 필요하지 않습니다.
 
 ## 실행 전 확인
 
-- Artifact의 `incomplete`가 `false`이고 모든 checksum과 shard row 수가 일치해야 합니다.
-- Target은 이미 실행 중인 standalone 또는 distributed Milvus endpoint여야 합니다.
-  Replayer는 Milvus client일 뿐 server를 설치하거나 시작하지 않습니다. 처음 테스트할
-  때는 하나의 standalone endpoint를 record와 replay에 함께 사용할 수 있습니다.
-- Target Milvus에 collection/index 생성, insert, flush, load, search/query 권한이
-  필요합니다.
-- `--collection`은 target에 아직 존재하지 않는 이름이어야 합니다.
-- Target Milvus가 recorded vector dimension, metric과 index type을 지원해야 합니다.
-- 터미널에서 `python -m milvus_trace.replay`를 직접 실행하는 경우에는
-  [`requirements-replay.lock`](../docker/requirements-replay.lock)의 Python package가
-  필요합니다. 이 방식에는 RAGPerf pipeline, dataset/model, GPU와 monitoring system이
-  필요하지 않습니다. Docker replay를 선택하면 Python package 설치도 필요 없으며
-  [Docker 문서](docker.md)의 image를 사용합니다.
+- `verify_artifact()`로 artifact가 `incomplete: false`인지, checksum과 shard row 수가 모두
+  일치하는지 확인합니다.
+- Target Milvus는 이미 실행 중이어야 합니다. Replayer는 client만 제공하며 server를 설치하거나
+  시작하지 않습니다. 처음에는 record와 replay에 같은 standalone endpoint를 사용해도 됩니다.
+- Target에 collection/index 생성, insert, flush, load, search/query 권한이 있고 recorded vector
+  dimension, metric, index type을 지원하는지 확인합니다. `--collection`은 아직 존재하지 않는
+  새 이름이어야 합니다.
+- 실행 방식에 따라 준비합니다. Python CLI는
+  [`requirements-replay.lock`](../docker/requirements-replay.lock)을 설치하면 되며 RAGPerf
+  pipeline, dataset/model, GPU와 monitoring system은 필요하지 않습니다. Docker replay는
+  local Python package 없이 [Docker 문서](docker.md)의 image를 사용합니다.
 
-먼저 artifact만 검증하려면 Milvus에 연결하지 않는 다음 명령을 사용합니다.
+## Artifact 검증
+
+Milvus에 연결하지 않고 artifact만 확인하려면 다음 명령을 실행합니다.
 
 ```bash
 python -c "from milvus_trace.artifact import verify_artifact; m = verify_artifact('/path/to/artifact'); print(m['format'], m['event_count'])"
