@@ -14,8 +14,8 @@ retrieved results <────────────────────�
                                        └─ /mnt/nvme/milvus-data
 ```
 
-일반 replay option과 result schema는 [재생 가이드](REPLAY.md), 측정 경계는
-[Benchmark 방법론](BENCHMARK_METHODOLOGY.md)이 단일 출처입니다. 이 문서는 격리 VM
+일반 replay option과 result schema는 [재생 가이드](replay.md), 측정 경계는
+[Benchmark 방법론](benchmark_methodology.md)이 단일 출처입니다. 이 문서는 격리 VM
 staging과 DISKANN mount 교체만 설명합니다.
 
 ## 1. Replay VM의 apt 준비

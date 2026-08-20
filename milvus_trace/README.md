@@ -5,7 +5,7 @@ artifact로 기록하고, 같은 payload와 도착 간격을 다른 Milvus endpo
 Text, Image, Audio workload가 같은 artifact 형식과 replayer를 사용합니다. 여기서 `trace`는
 record session의 논리적 Milvus 요청 기록이고, `trace artifact`는 이를 replay할 수 있도록
 manifest, checksum, Parquet payload를 묶은 directory bundle입니다. 상세 용어는
-[artifact 형식](docs/ARTIFACT_FORMAT.md#용어)을 참조합니다.
+[artifact 형식](docs/artifact_format.md#용어)을 참조합니다.
 
 ```text
 Record host                                      Replay host
@@ -126,12 +126,12 @@ record를 실행한 뒤에는 생성된 collection 이름이 목록에 표시됩
 
 | 목적 | 필요한 환경 | 시작 문서 |
 | --- | --- | --- |
-| Record host: 실제 RAG workload 기록 | RAGPerf 전체 의존성, dataset/model, source Milvus | [기록 가이드](docs/RECORD.md) |
-| Replay host: Docker 없이 Python으로 replay | Python, replay 의존성, target Milvus | [재생 가이드](docs/REPLAY.md) |
-| Replay host: 격리된 CPU container에서 replay | Docker, target Milvus | [Docker 가이드](docs/DOCKER.md) |
-| Text/Image/Audio별 완전한 명령 | workload별 model과 config | [workload 예시](docs/WORKLOADS.md) |
-| 0.5TB 이상 capacity artifact | GPU 또는 CPU, 충분한 controller storage | [Vector workload](docs/VECTOR_WORKLOADS.md) |
-| 외부망 없는 VM의 xfs/3FS/pNFS replay | Controller SSH, offline wheels/images, mounted backend | [Staged remote replay](docs/STAGED_REMOTE_REPLAY.md) |
+| Record host: 실제 RAG workload 기록 | RAGPerf 전체 의존성, dataset/model, source Milvus | [기록 가이드](docs/record.md) |
+| Replay host: Docker 없이 Python으로 replay | Python, replay 의존성, target Milvus | [재생 가이드](docs/replay.md) |
+| Replay host: 격리된 CPU container에서 replay | Docker, target Milvus | [Docker 가이드](docs/docker.md) |
+| Text/Image/Audio별 완전한 명령 | workload별 model과 config | [workload 예시](docs/workloads.md) |
+| 0.5TB 이상 capacity artifact | GPU 또는 CPU, 충분한 controller storage | [Vector workload](docs/vector_workloads.md) |
+| 외부망 없는 VM의 xfs/3FS/pNFS replay | Controller SSH, offline wheels/images, mounted backend | [Staged remote replay](docs/staged_remote_replay.md) |
 | 반복 실험 matrix | 준비된 세 topology와 trace archive | [실험 계획](benchmarks/evaluation/README.md) |
 
 아래 명령은 모두 repository root에서 실행한다고 가정합니다.
@@ -212,7 +212,7 @@ protobuf==6.32.0
 README에 별도로 복사하지 않습니다. `source`는 현재 shell에 virtual environment를
 적용하는 단계이고, `PYTHONPATH`는 repository의 `src`와 root 모듈을 `run_new.py` 및
 workload script가 찾도록 합니다. Workload별 추가 요구 사항은
-[workload 예시](docs/WORKLOADS.md#workload별-요구-사항)를 확인합니다.
+[workload 예시](docs/workloads.md#workload별-요구-사항)를 확인합니다.
 
 Source Milvus는 앞의 standalone helper 또는 별도 endpoint로 준비합니다. Record host에는
 collection 생성, insert, index 생성, search/query 권한이 필요합니다.
@@ -265,7 +265,7 @@ wheelhouse를 만든 뒤 `staged_remote_replay.sh prepare-replay`가 source와 w
 전달하고, VM에서 `pip --no-index`로 같은 lock을 설치합니다. 이 VM은 필요에 따라
 Milvus standalone container를 함께 실행할 수 있지만, replayer 자체는 Python process입니다.
 자세한 경로와 `xfs`/`3FS`/`pNFS` mount 검사는
-[staged remote replay](docs/STAGED_REMOTE_REPLAY.md)를 따릅니다.
+[staged remote replay](docs/staged_remote_replay.md)를 따릅니다.
 
 #### Docker replayer를 실행하는 경우
 
@@ -276,8 +276,8 @@ server, RAGPerf pipeline, dataset/model은 포함되지 않습니다. Artifact�
 mount하고 target Milvus URI를 container에서 접근 가능한 주소로 지정해야 합니다.
 
 Image build, offline `docker load`, artifact mount 명령은
-[Docker replay 가이드](docs/DOCKER.md)를 사용합니다. 외부망 없는 VM에서 image와
-wheel을 함께 전달하는 경우에는 [staged remote replay](docs/STAGED_REMOTE_REPLAY.md)의
+[Docker replay 가이드](docs/docker.md)를 사용합니다. 외부망 없는 VM에서 image와
+wheel을 함께 전달하는 경우에는 [staged remote replay](docs/staged_remote_replay.md)의
 controller bundle 절차를 사용합니다.
 
 외부망이 제한된 replay VM에서 Docker로 Milvus standalone까지 실행하는 topology라면
@@ -418,7 +418,7 @@ mkdir -p "$MNTPNT/artifacts" "$MNTPNT/results"
 trace artifact directory를 가리키도록 확인합니다. Trace artifact directory와 source collection을
 이전 run과 공유하지 마십시오. Recorder는 기존 파일이 있는 artifact directory를 거부하며,
 자동으로 비우거나 덮어쓰지 않습니다. 용어 정의는
-[artifact 형식](docs/ARTIFACT_FORMAT.md#용어)을 참조합니다.
+[artifact 형식](docs/artifact_format.md#용어)을 참조합니다.
 
 ```bash
 python src/run_new.py \
@@ -434,7 +434,7 @@ python -c "from milvus_trace.artifact import verify_artifact; m = verify_artifac
 
 Text config는 Wikipedia corpus와 Natural Questions query, embedding model, generation
 model을 다운로드하므로 첫 실행은 오래 걸릴 수 있습니다. 작은 실행을 만드는 설정과
-Image/Audio 명령은 [workload 예시](docs/WORKLOADS.md)를 참조합니다.
+Image/Audio 명령은 [workload 예시](docs/workloads.md)를 참조합니다.
 
 ## 4. Artifact 재생
 
@@ -468,7 +468,7 @@ CLI는 `--result-file`을 생략하면 결과를 화면에 출력하지 않으�
 --timing none
 ```
 
-전체 timing, concurrency, warm-up 옵션은 [재생 가이드](docs/REPLAY.md)를 참조합니다.
+전체 timing, concurrency, warm-up 옵션은 [재생 가이드](docs/replay.md)를 참조합니다.
 
 ## 5. Docker replay
 
@@ -497,7 +497,7 @@ docker run --rm --network "$DOCKER_NETWORK" \
 ```
 
 Container에서 `REPLAY_MILVUS_URI`의 hostname을 해석하고 접속할 수 있어야 합니다.
-Network 선택, 사설 CA, mount 권한과 GHCR 배포는 [Docker 가이드](docs/DOCKER.md)에
+Network 선택, 사설 CA, mount 권한과 GHCR 배포는 [Docker 가이드](docs/docker.md)에
 설명되어 있습니다.
 
 ## Artifact 공유
@@ -513,19 +513,19 @@ python -m milvus_trace.package_artifact \
 ```
 
 명령은 archive와 `text-run-001.tar.zst.sha256`을 함께 생성합니다. 자세한 directory
-구조와 검증 계약은 [artifact 형식](docs/ARTIFACT_FORMAT.md)을 참조합니다.
+구조와 검증 계약은 [artifact 형식](docs/artifact_format.md)을 참조합니다.
 
 ## 문서 안내
 
 | 문서 | 내용 |
 | --- | --- |
-| [RECORD.md](docs/RECORD.md) | trace 설정, 기록 시점, 완료 확인, 실패 처리 |
-| [REPLAY.md](docs/REPLAY.md) | 실행 순서, CLI 옵션, 결과 JSON, 오류 처리 |
-| [WORKLOADS.md](docs/WORKLOADS.md) | Text, Image, Audio의 record/native/Docker 예시 |
-| [DOCKER.md](docs/DOCKER.md) | replay image build, network, mount, GHCR |
-| [ARTIFACT_FORMAT.md](docs/ARTIFACT_FORMAT.md) | manifest, Parquet shard, checksum 계약 |
-| [BENCHMARK_METHODOLOGY.md](docs/BENCHMARK_METHODOLOGY.md) | timing과 결과 해석 |
-| [AUDIO.md](docs/AUDIO.md) | Audio loader, ASR 경계, 개인정보 범위 |
+| [record.md](docs/record.md) | trace 설정, 기록 시점, 완료 확인, 실패 처리 |
+| [replay.md](docs/replay.md) | 실행 순서, CLI 옵션, 결과 JSON, 오류 처리 |
+| [workloads.md](docs/workloads.md) | Text, Image, Audio의 record/native/Docker 예시 |
+| [docker.md](docs/docker.md) | replay image build, network, mount, GHCR |
+| [artifact_format.md](docs/artifact_format.md) | manifest, Parquet shard, checksum 계약 |
+| [benchmark_methodology.md](docs/benchmark_methodology.md) | timing과 결과 해석 |
+| [audio.md](docs/audio.md) | Audio loader, ASR 경계, 개인정보 범위 |
 
 ## 개발 검증
 

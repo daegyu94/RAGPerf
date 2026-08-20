@@ -2,7 +2,7 @@
 
 DISKANN filesystem 비교에는 두 종류의 trace를 구분합니다.
 
-- 실제 Text/Image/Audio RAG의 요청 도착 패턴은 기존 [workload 예시](WORKLOADS.md)에
+- 실제 Text/Image/Audio RAG의 요청 도착 패턴은 기존 [workload 예시](workloads.md)에
   따라 record합니다.
 - 0.5TB, 1TB처럼 corpus 용량을 통제하는 실험은 이 문서의 deterministic synthetic
   vector recorder를 사용합니다.
@@ -122,4 +122,4 @@ python -m milvus_trace.package_artifact \
   --output /data/ragperf-trace-archives/vector/0.5tb.tar.zst
 ```
 
-Archive 형식과 checksum 계약은 [Artifact 형식](ARTIFACT_FORMAT.md)이 단일 출처입니다.
+Archive 형식과 checksum 계약은 [Artifact 형식](artifact_format.md)이 단일 출처입니다.

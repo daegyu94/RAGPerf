@@ -139,7 +139,7 @@ python -c "from milvus_trace.artifact import verify_artifact; print(verify_artif
   않습니다.
 - Artifact는 암호화되지 않습니다. 공유와 보관 시 dataset의 보안 정책을 적용합니다.
 
-Audio의 구체적인 보존 범위는 [Audio 문서](AUDIO.md)를 참조합니다.
+Audio의 구체적인 보존 범위는 [Audio 문서](audio.md)를 참조합니다.
 
 ## Archive 패키징
 

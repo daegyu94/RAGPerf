@@ -2,8 +2,8 @@
 
 이 디렉터리는 같은 Milvus trace artifact를 `xfs`, `3fs`, `pnfs` filesystem에 바꿔
 replay하는 실험 matrix와 진행 순서를 정의합니다. Staging과 VM 준비는
-[Staged remote replay](../../docs/STAGED_REMOTE_REPLAY.md), workload 생성은
-[Vector workloads](../../docs/VECTOR_WORKLOADS.md)를 따릅니다.
+[Staged remote replay](../../docs/staged_remote_replay.md), workload 생성은
+[Vector workloads](../../docs/vector_workloads.md)를 따릅니다.
 모든 topology는 같은 `/mnt/nvme/milvus-data` data path를 사용하고
 `expected_fstype`만 backend에 맞게 검증합니다.
 
@@ -67,7 +67,7 @@ case marker, `matrix-summary.yaml`을 남깁니다. 성공한 case marker가 있
 
 ## 2. Capacity matrix
 
-각 preset artifact를 [Vector workloads](../../docs/VECTOR_WORKLOADS.md)의 명령으로
+각 preset artifact를 [Vector workloads](../../docs/vector_workloads.md)의 명령으로
 record/package하고 topology의 `controller_trace_root/vector`에 둡니다.
 
 ```text
@@ -126,5 +126,5 @@ system처럼 재현한다는 의미는 아니며 storage request arrival만 바�
   scheduler lag와 request failures를 함께 확인합니다.
 
 Primary metric과 bootstrap/timed replay 경계는 기존
-[Benchmark 방법론](../../docs/BENCHMARK_METHODOLOGY.md)을 그대로 사용합니다. 추가로
+[Benchmark 방법론](../../docs/benchmark_methodology.md)을 그대로 사용합니다. 추가로
 `run-metadata.txt`의 mount identity와 disk byte를 case metadata와 함께 보관합니다.

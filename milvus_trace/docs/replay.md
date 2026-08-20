@@ -1,6 +1,6 @@
 # 재생(Replay)
 
-Replayer는 [trace artifact](ARTIFACT_FORMAT.md#용어)의 bootstrap corpus와 timed Milvus
+Replayer는 [trace artifact](artifact_format.md#용어)의 bootstrap corpus와 timed Milvus
 요청을 하나의 새 target collection에 재생합니다. Text, Image, Audio 모두 같은 CLI를 사용하며
 record host의 dataset, model, GPU는 필요하지 않습니다.
 
@@ -21,7 +21,7 @@ record host의 dataset, model, GPU는 필요하지 않습니다.
   [`requirements-replay.lock`](../docker/requirements-replay.lock)의 Python package가
   필요합니다. 이 방식에는 RAGPerf pipeline, dataset/model, GPU와 monitoring system이
   필요하지 않습니다. Docker replay를 선택하면 Python package 설치도 필요 없으며
-  [Docker 문서](DOCKER.md)의 image를 사용합니다.
+  [Docker 문서](docker.md)의 image를 사용합니다.
 
 먼저 artifact만 검증하려면 Milvus에 연결하지 않는 다음 명령을 사용합니다.
 
@@ -120,7 +120,7 @@ python -m milvus_trace.replay \
 
 `time-scale`은 Milvus 요청 사이의 도착 간격만 바꿉니다. Record 당시의 GPU/model
 계산량을 target에서 다시 실행하거나 비례 조정하지 않습니다. 결과 비교 방법은
-[benchmark 방법론](BENCHMARK_METHODOLOGY.md)을 참조합니다.
+[benchmark 방법론](benchmark_methodology.md)을 참조합니다.
 
 ## Concurrency와 overload
 
@@ -195,5 +195,5 @@ drop을 수행하지 않습니다.
 | `max-in-flight ... reached` | Target 처리량, 배속, in-flight 상한 확인 |
 | Milvus index 오류 | Target server가 recorded index/metric을 지원하는지 확인 |
 
-Docker 실행 문제는 [Docker 문서](DOCKER.md), workload별 명령은
-[workload 예시](WORKLOADS.md)를 참조합니다.
+Docker 실행 문제는 [Docker 문서](docker.md), workload별 명령은
+[workload 예시](workloads.md)를 참조합니다.

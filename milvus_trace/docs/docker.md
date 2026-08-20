@@ -95,7 +95,7 @@ docker run --rm --network "$DOCKER_NETWORK" \
 ```
 
 `WORKLOAD`에는 `text`, `image`, `audio`를 사용할 수 있습니다. workload별 완전한
-명령은 [workload 예시](WORKLOADS.md)를 참조하십시오.
+명령은 [workload 예시](workloads.md)를 참조하십시오.
 
 ## tar.zst release asset 사용
 

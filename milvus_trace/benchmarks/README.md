@@ -24,8 +24,8 @@ benchmarks/
 
 | 목적 | 문서 |
 | --- | --- |
-| 0.5TB, 1TB 등 vector artifact 생성 | [Vector workloads](../docs/VECTOR_WORKLOADS.md) |
-| 외부망 없는 replay VM 준비와 단일 실행 | [Staged remote replay](../docs/STAGED_REMOTE_REPLAY.md) |
+| 0.5TB, 1TB 등 vector artifact 생성 | [Vector workloads](../docs/vector_workloads.md) |
+| 외부망 없는 replay VM 준비와 단일 실행 | [Staged remote replay](../docs/staged_remote_replay.md) |
 | xfs/3FS/pNFS matrix와 측정 순서 | [Evaluation plan](evaluation/README.md) |
 
 모든 Python 명령은 project virtual environment에서 실행합니다. Shell wrapper가 있는

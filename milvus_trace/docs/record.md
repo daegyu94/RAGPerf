@@ -155,7 +155,7 @@ NumPy scalar/array처럼 `tolist()` 또는 `item()`으로 변환 가능한 값�
 | Audio | `config/milvus_audio.yaml` | `$MNTPNT/artifacts/audio` |
 
 실제 명령, model/GPU 요구 사항, 작은 run을 만드는 설정은
-[workload별 예시](WORKLOADS.md)를 참조합니다.
+[workload별 예시](workloads.md)를 참조합니다.
 
 ## 완료 확인
 
@@ -180,7 +180,7 @@ inserts-00000.parquet          # timed insert가 있을 때만 생성
 ```
 
 `verify_artifact()`는 format, `incomplete`, checksum, manifest에 기록된 shard row 수를
-검사합니다. 출력 파일의 의미는 [artifact 형식](ARTIFACT_FORMAT.md)을 참조합니다.
+검사합니다. 출력 파일의 의미는 [artifact 형식](artifact_format.md)을 참조합니다.
 
 ## Queue overflow와 writer 오류
 
@@ -202,5 +202,5 @@ Artifact에는 Milvus에 실제 insert한 text와 scalar metadata가 평문 JSON
 들어갑니다. API token은 manifest에 저장하지 않지만 dataset의 text, file path, document
 identifier는 저장될 수 있습니다. 공유하기 전에 workload별 payload 정책을 확인합니다.
 
-Audio의 원본 bytes와 query transcript 보존 범위는 [Audio 문서](AUDIO.md)에 설명되어
+Audio의 원본 bytes와 query transcript 보존 범위는 [Audio 문서](audio.md)에 설명되어
 있습니다.

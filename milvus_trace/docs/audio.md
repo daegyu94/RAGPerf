@@ -72,4 +72,4 @@ replay 단계에서는 Whisper, `torch`, CUDA가 필요하지 않습니다. sear
 모델 다운로드나 오디오 decoder가 없는 환경에서는 recorder/replayer 단위 테스트를
 먼저 실행하십시오. CPU-only replay image는 오디오 모델을 설치하지 않습니다.
 
-native/Docker replay 명령은 [workload별 예시](WORKLOADS.md)를 참조하십시오.
+native/Docker replay 명령은 [workload별 예시](workloads.md)를 참조하십시오.

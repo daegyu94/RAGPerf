@@ -3,7 +3,7 @@
 이 문서는 repository root에서 명령을 실행한다고 가정합니다. record에는 RAGPerf의
 dataset, embedding/ASR, generation 의존성이 필요하고 replay에는 Milvus client만
 필요합니다. 0.5TB, 1TB처럼 용량을 통제한 synthetic DISKANN dataset은 상세 내용을
-여기에 중복하지 않고 [Vector workload 기록](VECTOR_WORKLOADS.md)에서 설명합니다.
+여기에 중복하지 않고 [Vector workload 기록](vector_workloads.md)에서 설명합니다.
 
 먼저 [Milvus trace 설치](../README.md#1-설치)와 standalone Milvus 서버 준비를
 완료합니다. 처음 테스트에서는 하나의 서버를 record와 replay에 함께 사용하고, source
@@ -64,7 +64,7 @@ Record 전에 config의 `sys.vector_db.collection_name`을 이번 run만의 sour
 이름으로 바꿉니다. 예시의 trace artifact directory도 존재하지 않거나 비어 있어야 합니다.
 Recorder는 기존 파일이 있는 경로를 거부하므로 run마다 새 경로를 사용합니다.
 Replayer의 `--collection` 역시 매 실행마다 새 target 이름을 사용합니다. 자세한 이유는
-[기록 가이드](RECORD.md#run마다-새로-정할-값)를 참조합니다.
+[기록 가이드](record.md#run마다-새로-정할-값)를 참조합니다.
 
 ## Text RAG
 
