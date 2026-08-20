@@ -121,8 +121,7 @@ prepare_local_requirements() {
     # Keep dependency ownership in the root project, while applying trace-local
     # compatibility overrides without modifying any root-tracked file.
     awk '!/^[[:space:]]*vllm([[:space:]]|=|<|>)/' "$root_requirements" > "$local_requirements"
-    printf '%s\n' 'protobuf==6.32.0' >> "$local_requirements"
-    printf '\n# Milvus trace compatibility overrides\nvllm==0.8.5.post1\nmarshmallow<4\nsetuptools>=74.1.1,<81\n' >> "$local_requirements"
+    printf '\n# Milvus trace compatibility overrides\nvllm==0.8.5.post1\nmarshmallow<4\nsetuptools>=74.1.1,<81\nprotobuf==6.32.0\n' >> "$local_requirements"
     sed -E 's/^clang==([0-9]+\.[0-9]+)(.*)$/clang~=\1\2/' \
         "$cmake_extra_requirements" >> "$local_requirements"
     printf '%s\n' "$local_requirements"
