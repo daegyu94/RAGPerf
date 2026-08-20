@@ -9,12 +9,13 @@ benchmark나 model 성능 측정을 대체하지 않습니다.
 ```text
 Record timeline
 
-model load ── query embedding ── search ── generation ── next embedding ── search
-               └────────────── recorded arrival gaps ────────────────────────┘
+model load ── upstream work ── Milvus event ── upstream work ── Milvus event
+                              (insert/search/query)
+               └──────────── recorded arrival gaps ────────────┘
 
 Replay timeline
 
-              search ──────────────── search
+              insert/search/query ─── insert/search/query
               └── 같은 payload와 time-scaled arrival offset
 ```
 
@@ -25,6 +26,27 @@ upstream 지연이 포함됩니다.
 
 Replay가 실행하는 것은 저장된 Milvus request뿐입니다. GPU computation을 다시
 실행하거나 그 계산의 resource 사용량을 target host에서 재현하지 않습니다.
+
+## Replay되는 작업
+
+위 그림의 `Milvus event`에는 다음 작업이 포함될 수 있습니다. `search`만 replay하는
+것이 아닙니다.
+
+| 구분 | 동작 | 결과에 기록되는 위치 |
+| --- | --- | --- |
+| Bootstrap | Recorded corpus를 target에 `insert`하고 `flush` | `bootstrap.insert_and_flush_ns` |
+| Timed event | `insert`, vector `search`, scalar/filter `query`를 기록된 순서와 offset으로 제출 | `replay.operation_counts`와 `replay.latency`의 operation별 항목 |
+| Warm-up | 옵션을 지정하면 첫 번째 `search` payload만 timed replay 전에 반복 | `bootstrap.warmup_requests`. Timed 결과에는 제외 |
+| 미지원 | `delete`는 record/replay operation으로 지원하지 않음 | 해당 event가 있으면 `unsupported operation` 오류 |
+
+Bootstrap의 corpus `insert`, `flush`, index 생성, collection load는 target을 준비하는
+단계입니다. 이 작업들은 timed event의 arrival 간격이나 operation별 timed latency에
+포함되지 않으므로, timed replay 결과와 따로 비교합니다.
+
+Timed `query`는 자연어 질의가 아니라 Milvus `query()` 호출입니다. Recorded filter와
+parameter가 함께 저장되며 replay 시 같은 요청으로 제출됩니다. 현재 timed operation은
+`insert`, `search`, `query` 세 종류이므로, `delete`나 다른 Milvus API를 benchmark에
+포함하려면 recorder/replayer 구현을 먼저 확장해야 합니다.
 
 ## Setup과 timed workload
 
