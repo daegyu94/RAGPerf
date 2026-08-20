@@ -192,4 +192,4 @@ inserts-00000.parquet          # timed insert가 있을 때만 생성
 - Artifact에는 insert한 text와 scalar metadata가 평문 JSON/Parquet로 저장될 수 있습니다.
   API token은 manifest에 저장하지 않지만 text, file path, document identifier 등 민감정보가
   포함될 수 있으므로 공유 전 payload 정책을 확인합니다. Audio 원본 bytes와 query transcript
-  보존 범위는 [Audio 문서](audio.md)를 참조합니다.
+  보존 범위는 [Audio RAG](workloads.md#audio-rag)를 참조합니다.

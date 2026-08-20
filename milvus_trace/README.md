@@ -454,7 +454,6 @@ python -m milvus_trace.package_artifact \
 | [workloads.md](docs/workloads.md) | Text, Image, Audio의 record/Python replay 예시 |
 | [artifact_format.md](docs/artifact_format.md) | manifest, Parquet shard, checksum 계약 |
 | [benchmark_methodology.md](docs/benchmark_methodology.md) | timing과 결과 해석 |
-| [audio.md](docs/audio.md) | Audio loader, ASR 경계, 개인정보 범위 |
 
 ## 개발 검증
 

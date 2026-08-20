@@ -160,6 +160,10 @@ python src/run_new.py \
 insert에는 vector, ASR transcript와 JSON metadata가 기록됩니다. query audio와 query
 transcript 원문은 artifact에 저장되지 않고, Milvus에 전달한 search vector만 저장됩니다.
 
+Replay는 저장된 typed search vector와 event timing을 사용합니다. 따라서 record 중
+ASR와 embedding에 걸린 시간은 event arrival interval에 포함되지만, replay에서 ASR
+계산이나 CPU/GPU 사용량을 다시 실행하지는 않습니다.
+
 ### Python replay
 
 ```bash
@@ -171,7 +175,6 @@ python -m milvus_trace.replay \
   --result-file "$MNTPNT/results/audio.json"
 ```
 
-target host에는 Whisper, audio decoder, `torch`, CUDA가 필요하지 않습니다.
 
 ## 크기와 부하 조절
 
