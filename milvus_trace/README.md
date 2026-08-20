@@ -123,9 +123,9 @@ record를 실행한 뒤에는 생성된 collection 이름이 목록에 표시됩
 
 | 목적 | 필요한 환경 | 시작 문서 |
 | --- | --- | --- |
-| 실제 RAG workload 기록 | RAGPerf 전체 의존성, dataset/model, source Milvus | [기록 가이드](docs/RECORD.md) |
-| Docker 없이 Python으로 replay | Python, replay 의존성, target Milvus | [재생 가이드](docs/REPLAY.md) |
-| 격리된 CPU container에서 replay | Docker, target Milvus | [Docker 가이드](docs/DOCKER.md) |
+| Record host: 실제 RAG workload 기록 | RAGPerf 전체 의존성, dataset/model, source Milvus | [기록 가이드](docs/RECORD.md) |
+| Replay host: Docker 없이 Python으로 replay | Python, replay 의존성, target Milvus | [재생 가이드](docs/REPLAY.md) |
+| Replay host: 격리된 CPU container에서 replay | Docker, target Milvus | [Docker 가이드](docs/DOCKER.md) |
 | Text/Image/Audio별 완전한 명령 | workload별 model과 config | [workload 예시](docs/WORKLOADS.md) |
 | 0.5TB 이상 capacity artifact | GPU 또는 CPU, 충분한 controller storage | [Vector workload](docs/VECTOR_WORKLOADS.md) |
 | 외부망 없는 VM의 xfs/3FS/pNFS replay | Controller SSH, offline wheels/images, mounted backend | [Staged remote replay](docs/STAGED_REMOTE_REPLAY.md) |
@@ -133,22 +133,22 @@ record를 실행한 뒤에는 생성된 collection 이름이 목록에 표시됩
 
 아래 명령은 모두 repository root에서 실행한다고 가정합니다.
 
-## 1. 설치
+## 1. Host별 설치와 실행
 
-### Record host 준비와 실행
+### Record host (source workload) 준비와 실행
 
-실제 workload record는 아래 순서로 진행합니다. 모든 명령은 repository root에서 실행한다고
-가정합니다. 먼저 record host의 system prerequisite를 준비하고, 그 다음 Python environment를
-설정합니다.
+Record host는 dataset과 model을 실행해 실제 RAG 요청을 만들고, source Milvus 요청과 도착
+간격을 artifact로 기록합니다. Record와 replay를 같은 host에서 실행할 수도 있지만, 성능 비교
+실험에서는 replay host와 target Milvus를 별도로 둡니다.
 
-`setup_venv.sh`를 실행하기 전에 다음 host prerequisite를 준비합니다.
+`setup_venv.sh`를 실행하기 전에 다음 record host prerequisite를 준비합니다.
 
 | 범위 | 필수 항목 | 비고 |
 | --- | --- | --- |
 | Python | Python 3.10 이상, `venv`/`ensurepip` | 새 virtual environment 생성에 사용 |
 | Native build | CMake 3.22 이상, C++20 compatible compiler | monitoring module `libmsys_pymod` 빌드에 사용 |
-| Python 설치원 | PyPI 또는 접근 가능한 사내 package index | root requirements와 generated build requirements 설치 |
-| Record/서버 | Docker Engine, Compose v2, CUDA driver/toolkit | setup script가 설치하지 않으며 workload와 standalone server에 필요 |
+| Python 설치원 | PyPI 또는 접근 가능한 사내 package index | RAGPerf requirements와 generated build requirements 설치 |
+| Record/서버 | Docker Engine, Compose v2, CUDA driver/toolkit | setup script가 설치하지 않으며 workload와 source Milvus에 필요 |
 
 Ubuntu 24.04 기준으로 record/controller host에는 다음 package를 설치합니다.
 `python3-venv`가 venv 안의 pip bootstrap을 제공하므로 별도 system-wide pip는 필수가
@@ -169,19 +169,9 @@ Docker daemon을 일반 사용자로 사용하려면 logout/login 후 다음을 
 sudo usermod -aG docker "$USER"
 ```
 
-외부망이 제한된 replay VM에는 다음 package를 apt mirror에서 설치합니다. 이 목록에는
-staged replay, Docker Compose, XFS data mount에 필요한 도구가 포함됩니다.
-
-```bash
-sudo apt-get update
-sudo apt-get install -y \
-  bash coreutils findutils util-linux tar zstd rsync openssh-server \
-  python3 python3-venv docker.io docker-compose-v2 xfsprogs
-```
-
 GPU record를 실행할 때는 NVIDIA driver/CUDA를 host 이미지에 맞게 설치해야 합니다. 3FS와
 pNFS는 Ubuntu 공통 package가 아니라 각 storage 환경의 client/mount package와 설정을
-사용하므로 위 apt 목록에 고정하지 않습니다.
+사용하므로 record host 설치 목록에는 고정하지 않습니다.
 
 위 prerequisite를 준비한 뒤, 처음 설치하는 host 또는 새 shell에서 다음 공통 흐름을
 실행합니다. 이미 project virtual environment가 있으면 첫 줄은 건너뛰고 마지막 두 줄만
@@ -218,33 +208,82 @@ README에 별도로 복사하지 않습니다. `source`는 현재 shell에 virtu
 workload script가 찾도록 합니다. Workload별 추가 요구 사항은
 [workload 예시](docs/WORKLOADS.md#workload별-요구-사항)를 확인합니다.
 
-Milvus server는 앞의 helper로 준비합니다. Record host에는 collection 생성, insert,
-index 생성, search/query 권한이 필요합니다.
+Source Milvus는 앞의 standalone helper 또는 별도 endpoint로 준비합니다. Record host에는
+collection 생성, insert, index 생성, search/query 권한이 필요합니다.
 
-### Docker 없이 Python으로 replay하는 경우
+### Replay host 준비
 
-`python -m milvus_trace.replay`를 직접 실행하는 방식입니다. 이 경우 record에 필요한
-RAGPerf pipeline, dataset, embedding/ASR/generation model, GPU와 monitoring system은
-설치하지 않아도 됩니다. 대신 replay CLI가 사용하는 `pymilvus`, `pyarrow` 등의 Python
-package만 설치하면 됩니다. 그 package 목록을
-[`requirements-replay.lock`](docker/requirements-replay.lock)에 고정해 두었습니다.
+Record가 정상 종료되면 `workload-manifest.yaml`, Parquet shard, `SHA256SUMS`가 있는
+artifact를 replay host로 전달한 뒤 다음 두 방식 중 하나를 선택합니다. Replay는 artifact에 저장된
+Milvus payload와 도착 간격만 재현하며, record의 dataset/model pipeline을 다시 실행하지
+않습니다. 따라서 replay host에는 source Milvus, dataset, embedding/ASR/generation model,
+GPU와 monitoring system이 필요하지 않습니다. Target Milvus endpoint는 이미 실행 중이어야
+하며 replayer가 server를 시작하지는 않습니다.
 
-Python 3.10 이상을 사용하고, 기존 project virtual environment를 활성화하거나 replay
-전용 environment를 새로 만듭니다.
+| 방식 | Replayer 실행 위치 | 필요한 것 | 필요하지 않은 것 |
+| --- | --- | --- | --- |
+| Python replayer | host의 `python -m milvus_trace.replay` | Python 3.10+, replay lock, artifact, target Milvus | RAGPerf 전체 의존성, dataset/model, GPU, monitoring, source Milvus |
+| Docker replayer | replay container | Docker, replayer image, artifact mount, target Milvus | host Python, RAGPerf 전체 의존성, dataset/model, GPU, monitoring, source Milvus |
+
+#### Docker 없이 Python replayer를 실행하는 경우
+
+여기서 `Docker 없이`라는 말은 **replayer process를 host Python에서 실행한다**는
+뜻입니다. Target Milvus가 Docker standalone으로 실행 중이어도 이 방식에 해당합니다.
+Record host에서 사용한 full RAGPerf environment를 재사용하거나, 다른 package와 분리된
+replay 전용 environment를 만들 수 있습니다. `setup_venv.sh`는 record용 script이므로
+replay host에서 실행할 필요가 없습니다.
+
+기존 project virtual environment를 사용할 때는 다음만 실행합니다.
 
 ```bash
-# 기존 project environment를 사용할 때
 source .venv/bin/activate
+```
 
-# 별도 environment가 필요할 때는 위 두 줄 대신 다음을 사용합니다.
-# python -m venv .venv-replay
-# source .venv-replay/bin/activate
+별도 replay environment를 사용할 때는 다음처럼 만듭니다. 다른 package와의 충돌을 피하려면
+이 방식을 권장합니다.
 
+```bash
+python -m venv .venv-replay
+source .venv-replay/bin/activate
+```
+
+두 경우 모두 활성화한 environment에 replay lock만 설치합니다.
+
+```bash
 python -m pip install --upgrade pip
 python -m pip install -r milvus_trace/docker/requirements-replay.lock
 ```
 
-Docker replay를 사용할 host에는 Python 환경이 필요하지 않습니다.
+외부망이 없는 staged replay VM에서는 위의 PyPI 설치를 실행하지 않습니다. Controller에서
+wheelhouse를 만든 뒤 `staged_remote_replay.sh prepare-replay`가 source와 wheel을 VM으로
+전달하고, VM에서 `pip --no-index`로 같은 lock을 설치합니다. 이 VM은 필요에 따라
+Milvus standalone container를 함께 실행할 수 있지만, replayer 자체는 Python process입니다.
+자세한 경로와 `xfs`/`3FS`/`pNFS` mount 검사는
+[staged remote replay](docs/STAGED_REMOTE_REPLAY.md)를 따릅니다.
+
+#### Docker replayer를 실행하는 경우
+
+이 방식은 replayer 자체를 `milvus_trace/docker/Dockerfile`로 만든 container에서 실행합니다.
+Host에는 Python virtual environment나 replay package를 설치하지 않고 Docker Engine만
+준비하면 됩니다. Image에는 replay code와 최소 Python dependency만 들어 있으며 Milvus
+server, RAGPerf pipeline, dataset/model은 포함되지 않습니다. Artifact를 read-only로
+mount하고 target Milvus URI를 container에서 접근 가능한 주소로 지정해야 합니다.
+
+Image build, offline `docker load`, artifact mount 명령은
+[Docker replay 가이드](docs/DOCKER.md)를 사용합니다. 외부망 없는 VM에서 image와
+wheel을 함께 전달하는 경우에는 [staged remote replay](docs/STAGED_REMOTE_REPLAY.md)의
+controller bundle 절차를 사용합니다.
+
+외부망이 제한된 replay VM에서 Docker로 Milvus standalone까지 실행하는 topology라면
+내부 apt mirror에서 다음 package를 설치합니다. 순수 Python replayer가 원격 target Milvus에
+접속하는 경우에는 Docker package가 필요하지 않습니다.
+
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+  bash coreutils findutils util-linux tar zstd rsync openssh-server \
+  python3 python3-venv docker.io docker-compose-v2 xfsprogs
+```
 
 ## 2. Smoke test: 실제 record → replay
 
@@ -289,9 +328,9 @@ download, monitoring, source Milvus insert/index/search, artifact 생성과 repl
 이 테스트에는 Audio record에 필요한 Python 의존성(`datasets`, `torchcodec`,
 `transformers`, `sentence-transformers`, `soundfile`, `pymilvus`), monitoring
 `libmsys*.so`, Whisper와 embedding model, 그리고 실행 중인 standalone Milvus 서버가
-필요합니다. RAGPerf가 Milvus 서버를 시작해 주지는 않으므로 이 단계를 먼저 완료해야
-합니다. GPU는 필요하지 않도록 CPU 설정을 사용합니다. 단, model download와 CPU
-inference 때문에 시간이 걸릴 수 있습니다.
+필요합니다. `run_new.py`가 Milvus 서버를 시작해 주지는 않으므로 이 단계를 먼저
+완료해야 합니다. GPU는 필요하지 않도록 CPU 설정을 사용합니다. 단, model download와
+CPU inference 때문에 시간이 걸릴 수 있습니다.
 
 이 smoke config는 `hf-internal-testing/librispeech_asr_dummy`의 `validation` split에서
 실제 오디오를 8개만 읽습니다. 전체 LibriSpeech를 받지 않으므로 첫 기능 확인에 적합하며,
@@ -300,9 +339,21 @@ Audio record host에는 `torchcodec`가 필요합니다. 이 config는 `generati
 `evaluate: false`이므로 Audio smoke만 실행할 때 vLLM은 필요하지 않습니다.
 
 
-먼저 위의 확인 명령으로 standalone Milvus 서버가 `localhost:19530`에서 실행 중인지
-확인합니다. 같은 서버를 source와 target 역할에 함께 사용하며, replay 때는 새로운
-collection 이름을 사용합니다.
+먼저 repository root에서 standalone Milvus 서버를 시작하고 연결을 확인합니다. 이미
+서버가 실행 중이면 `start` 명령은 생략할 수 있습니다. 같은 서버를 source와 target
+역할에 함께 사용하며, replay 때는 새로운 collection 이름을 사용합니다.
+
+```bash
+./milvus_trace/scripts/milvus-standalone.sh start
+./milvus_trace/scripts/milvus-standalone.sh status
+
+source .venv/bin/activate
+python -c "from pymilvus import MilvusClient; print(MilvusClient(uri='http://localhost:19530', token='root:Milvus').list_collections())"
+```
+
+연결 확인 명령이 `[]` 또는 기존 collection 목록을 출력하면 다음 단계로 진행합니다.
+`connection refused`, timeout, 인증 오류가 나오면 Milvus 서버 상태나 URI/token을
+먼저 확인합니다.
 
 ```bash
 export MNTPNT="$PWD/artifacts/audio-smoke-run-001"
