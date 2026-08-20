@@ -40,20 +40,20 @@ image를 Docker Hub에서 받으므로 첫 실행에는 네트워크와 충분�
 object data는 MinIO에 맡기는 최소 3-service 구조입니다.
 
 ```text
-Client / PyMilvus
-       |
-  localhost:19530
-       v
-+----------------+
-| Milvus         |
-| standalone     |
-+----------------+
-       |                 |
-   metadata         object data
-       v                 v
-   +-------+         +-------+
-   | etcd  |         | MinIO |
-   +-------+         +-------+
+                    Client / PyMilvus
+                            |
+                      localhost:19530
+                            v
+                    +----------------+
+                    | Milvus         |
+                    | standalone     |
+                    +----------------+
+                       |             |
+                   metadata     object data
+                       v             v
+                    +------+      +-------+
+                    | etcd |      | MinIO |
+                    +------+      +-------+
 
 Host storage ($MILVUS_DATA_DIR, default: $PWD/.milvus/volumes)
 ├── etcd/       -> /etcd
